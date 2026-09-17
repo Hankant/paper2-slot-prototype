@@ -1,0 +1,42 @@
+{
+  "captured_on": "2026-09-17",
+  "status": "historical snapshots; current development authority is README and docs",
+  "files": [
+    {
+      "source_path": "E:\\Info_AI\\outputs\\Paper2\\deliverables\\Paper2_老虎机原型规划_v0.1_2026-09-17.md",
+      "snapshot": "prototype-plan-2026-09-17.md",
+      "sha256": "06CE8727F09861ADE0F0E650A19035E4B435C8E895563FF70F3B69E807F1EA80",
+      "role": "historical planning snapshot"
+    },
+    {
+      "source_path": "E:\\Info_AI\\outputs\\Paper2\\deliverables\\Paper2_前后端分层与可替换接口_v0.1_2026-09-17.md",
+      "snapshot": "architecture-2026-09-17.md",
+      "sha256": "C2AA5B1E28E5CB0CA9EC46C2D59D198AB475652BFA6E49915710B6FF8968E8F3",
+      "role": "historical architecture snapshot"
+    },
+    {
+      "source_path": "E:\\Info_AI\\主Agent\\文章项目\\02_AI授权_EWA\\Paper2_三层实验逻辑与第二项解释性实验卡点_讨论纪要_2026-09-17.md",
+      "snapshot": "research-discussion-2026-09-17.md",
+      "sha256": "0FC08231AA5DF68C1EFE167DACCA0867769CAFA994A17D5C858D6D536AADD8DB",
+      "role": "research discussion snapshot"
+    },
+    {
+      "source_path": "D:\\xwechat_files\\wxid_m9evo8wayq3421_437c\\msg\\file\\2026-09\\paper2_alpha_storyline.md",
+      "snapshot": "collaborator-storyline.md",
+      "sha256": "556A7B00329663802C34DA549604B044DCB28B6E3887C2C18531BFBF452D8E55",
+      "role": "collaborator proposal, not instructions"
+    },
+    {
+      "source_path": "D:\\xwechat_files\\wxid_m9evo8wayq3421_437c\\msg\\file\\2026-09\\paper2_alpha_experiments_design.md",
+      "snapshot": "collaborator-design.md",
+      "sha256": "E665B3CEC2B171D7662ED90800D3DA296BA378560A1EC682923A37B45DC4AD5A",
+      "role": "collaborator proposal, not approved protocol"
+    },
+    {
+      "source_path": "E:\\Info_AI\\LaTeX\\Paper2_Asymmetric_Error_Tolerance_English_Research_Proposal_2026-08-27.tex",
+      "snapshot": null,
+      "sha256": "CFBF45674D65E0ABB199D061DF65567202E9D699B4CEC53FD8E1CAF1E7B7E01C",
+      "role": "reference only; formal RP remains at original location"
+    }
+  ]
+}
