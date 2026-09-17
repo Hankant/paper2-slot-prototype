@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Paper 2 · 一题模拟预览</title>
+    <link rel="stylesheet" href="./preview.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <p class="eyebrow">PAPER 2 / INTERACTIVE PREVIEW</p>
+        <h1>这一轮，哪台机器会中奖？</h1>
+        <p>先独立预测，再选择来源、查看模拟建议，最后确认答案。</p>
+      </header>
+      <aside class="notice">
+        一题演示 · 固定材料与开奖 · 不是真实 AI 预测 · 仅内存保存，刷新清空。本页面未接入正式
+        jsPsych 流程。
+      </aside>
+      <ol class="steps">
+        <li data-step="prediction">1 独立预测</li>
+        <li data-step="source">2 选择来源</li>
+        <li data-step="final">3 确认答案</li>
+        <li data-step="feedback">4 查看反馈</li>
+      </ol>
+      <section class="panel" aria-labelledby="stage-title">
+        <p class="eyebrow" id="stage-label">开始前</p>
+        <h2 id="stage-title">正在准备预览…</h2>
+        <p id="stage-help"></p>
+        <div id="choices" class="choices"></div>
+        <div id="confidence-group">
+          <label for="confidence">预测信心 <output id="confidence-output">50</output> / 100</label
+          ><input id="confidence" type="range" min="0" max="100" value="50" />
+        </div>
+        <div id="advice" class="advice" hidden></div>
+        <div id="result" hidden></div>
+        <p id="feedback-status" role="status" aria-live="polite"></p>
+        <div class="actions">
+          <button id="confirm" class="primary" disabled>确认预测</button
+          ><button id="restart" hidden>重新体验</button
+          ><button id="export" hidden>下载本次模拟记录</button>
+        </div>
+        <p id="error" role="alert"></p>
+      </section>
+      <footer>
+        <span id="save-status">未上传 · 仅本页内存</span><a href="./index.html">查看工程状态</a>
+      </footer>
+    </main>
+    <script type="module" src="./preview.ts"></script>
+  </body>
+</html>

@@ -1,20 +1,24 @@
 # 多 agent 并行实施任务书
 
-状态：待派发。当前用户要求建立工作区与规划，不是立即启动代码实施。
+状态：G0 已有实现，2026-09-18 用户授权 Codex 接手修复并提供单题可点击预览；B/C/D 的完整实验模块仍待派发。当前版本和验证结果以 STATUS 为准。
+
+后续新增的 [Agent 施工指南](AGENT_CONSTRUCTION_GUIDE.md) 对所有角色生效：首次施工或换平台先读；统一使用 TypeScript，每个角色维护自己的 `handoffs/<角色>/LATEST.md`。文末提示可与本文件的角色任务组合派发。
 
 ## 1. 文件所有权
 
 每一轮由协调 agent 指派实际执行者；A/B/C/D/Q 是角色，不是已经创建的任务或运行中 agent。
 
-| 角色 | 职责 | 独占写入范围 | 开始条件 |
-|---|---|---|---|
-| A 协调与接口 | 工具链、公共类型、入口集成、计划 | 根工程配置/锁文件、README、AGENTS、docs、src/contracts、src/bootstrap.ts、tests/contracts、tests/fixtures、handoffs/A | 可开始 G0 |
-| B 实验前端 | jsPsych 时间线、状态控制、界面、手机适配 | src/experiment、src/ui、tests/experiment、handoffs/B | G0 通过 |
-| C 后端适配与保存 | LocalDemo、队列、真实后端评估及接入 | src/adapters、src/persistence、server、deploy、tests/adapters、handoffs/C | G0 通过 |
-| D 材料与审计 | 模拟材料、领域评分、离线审计 | src/domain、config、materials、analysis、tests/domain、tests/materials、handoffs/D | G0 通过 |
-| Q 独立验收 | 端到端与协议可替换检查 | tests/e2e、handoffs/Q、artifacts/qa | G2 可运行版本 |
+| 角色             | 职责                                     | 独占写入范围                                                                                                          | 开始条件      |
+| ---------------- | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ------------- |
+| A 协调与接口     | 工具链、公共类型、入口集成、计划         | 根工程配置/锁文件、README、AGENTS、docs、src/contracts、src/bootstrap.ts、tests/contracts、tests/fixtures、handoffs/A | 可开始 G0     |
+| B 实验前端       | jsPsych 时间线、状态控制、界面、手机适配 | src/experiment、src/ui、tests/experiment、handoffs/B                                                                  | G0 通过       |
+| C 后端适配与保存 | LocalDemo、队列、真实后端评估及接入      | src/adapters、src/persistence、server、deploy、tests/adapters、handoffs/C                                             | G0 通过       |
+| D 材料与审计     | 模拟材料、领域评分、离线审计             | src/domain、config、materials、analysis、tests/domain、tests/materials、handoffs/D                                    | G0 通过       |
+| Q 独立验收       | 端到端与协议可替换检查                   | tests/e2e、handoffs/Q、artifacts/qa                                                                                   | G2 可运行版本 |
 
 例外：G0 时 A 可初始化 config/demo.json 和空目录；在移交给 D 后不并发修改。所有 owner 变更写入 STATUS。来源快照无写入 owner，始终只读。
+
+本轮用户授权的修复例外：A/Codex 编写 src/ui/preview.*、src/adapters/local-demo/one-trial-preview.ts 和 tests/e2e/preview.spec.ts，以及 G0 契约场景。预览只覆盖一题、内存保存。后续 B 接手界面并用 jsPsych 实施完整流程；C 接手预览服务参考并实现真正 LocalDemo/保存队列；Q 接手端到端测试。src/bootstrap.ts 继续由 A 装配，C 不单独改它。开始接手前登记实际 owner，不能同时写相同文件。
 
 ## 2. 并发安排
 
@@ -36,7 +40,7 @@ B 使用 A 的静态接口 fixture，避免等 D 材料才开始页面；C 使�
 
 ### A：公共基础与集成
 
-> 工作目录为 E:/Info_AI/projects/paper2-slot-prototype。先读 AGENTS、README、DECISIONS、CONTRACTS 和本任务书。先完成 G0：初始化最小 jsPsych/TypeScript/Vite 工程，锁依赖；将接口文档转为类型和校验；建立虚拟 fixture 及明确的 demo 配置，不将候选设置升级为研究决定。当前没有业务代码，不要声称已有脚本可用。接口检查通过后更新 STATUS，通知 B/C/D 同一版本。只修改 A 的路径。后续负责 bootstrap 集成和验收汇总。保留其他项目修改，不自动提交或推送全仓库。
+> 工作目录为 E:/Info_AI/projects/paper2-slot-prototype。先读 AGENTS、README、DECISIONS、CONTRACTS、STATUS 和本任务书。当前已有工程与单题预览，不重新初始化。核对 0.3.0 接口及实际测试结果，维护统一类型、配置、fixture 和版本；不将演示设置升级为研究决定。按已冻结接口派发 B/C/D 并负责 bootstrap 集成和验收汇总。只修改 A 的路径。保留其他项目修改，不自动提交或推送全仓库。
 
 ### B：手机与电脑实验前端
 
@@ -48,7 +52,7 @@ B 使用 A 的静态接口 fixture，避免等 D 材料才开始页面；C 使�
 
 ### D：模拟材料与数据审计
 
-> 先读工作区 AGENTS、DECISIONS、CONTRACTS 和 G0 demo 配置。仅负责 src/domain、config、materials、analysis、tests/domain、tests/materials、handoffs/D。实现固定种子、版本化的模拟开奖结果和建议生成；本地演示如采用每轮唯一中奖者，概率之和为 1，按实际中奖者评分。记录建议目标命中率、实际命中率、分母、生成方式及机器位置映射。人类正确率只能由作答估计。构造固定测试向量，检查 TS 评分与 Python 审计一致；禁止把模拟建议说成真实 AI 预测能力。不启动新的理论/机制设计，不根据小演示样本报告 α 结论。
+> 先读工作区 AGENTS、施工指南、DECISIONS、CONTRACTS 和 G0 demo 配置。仅负责 src/domain、config、materials、analysis、tests/domain、tests/materials、handoffs/D。统一用 TypeScript 实现固定种子、版本化的模拟开奖结果和建议生成；本地演示如采用每轮唯一中奖者，概率之和为 1，按实际中奖者评分。记录建议目标命中率、实际命中率、分母、生成方式及机器位置映射。人类正确率只能由作答估计。构造带独立预期答案的固定测试向量，并从导出原始字段重算命中数和分母，与运行时评分对照；不能仅重复调用同一个评分函数便声称独立审计通过。禁止把模拟建议说成真实 AI 预测能力。不启动新的理论/机制设计，不根据小演示样本报告 α 结论。
 
 ### Q：独立验收
 

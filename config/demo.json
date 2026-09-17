@@ -1,0 +1,65 @@
+{
+  "config_version": "demo-0.3.0",
+  "simulation": true,
+  "provider": "local-demo",
+  "study_id": "paper2-slot-prototype",
+  "contract_version": "0.3.0",
+  "protocol_version": "unreleased",
+  "material_version": "0.3.0",
+  "adapter_version": "0.3.0",
+  "client_version": "0.3.0",
+  "entry_code_placeholder": "DEMO-ENTRY-CODE-001",
+  "task_definition": "Predict the machine that will hit on the next spin. The reward is determined by the actual spin outcome; choosing a higher-probability machine does not guarantee a reward.",
+  "phase_order": [
+    "entry",
+    "consent",
+    "profile",
+    "instructions",
+    "practice",
+    "calibration",
+    "main",
+    "finalizing",
+    "completed"
+  ],
+  "trial_phases": ["history", "prediction", "confidence", "advice_or_source", "feedback"],
+  "advice_timing": "after_choice",
+  "phase_trial_counts": {
+    "practice": 3,
+    "calibration": 6,
+    "main": 12
+  },
+  "machines_per_trial": 3,
+  "machine_assignment_strategy": "logical_ids_with_display_positions_left_center_right",
+  "feedback_mode": "after_each_trial",
+  "point_system": {
+    "scheme": "fixed_points_per_correct_prediction",
+    "correct_prediction_points": 10,
+    "incorrect_prediction_points": 0,
+    "no_real_money": true
+  },
+  "personal_data": {
+    "fields": ["participant_code", "age_band", "primary_language", "self_reported_device_class"],
+    "retention_days": 0,
+    "retention_note": "Demo adapter never writes to persistent storage; retention_days=0 is a safety floor, not a privacy claim.",
+    "no_real_personal_data": true
+  },
+  "capabilities": {
+    "persistentResults": "unverified",
+    "idempotentWrites": "unverified",
+    "resumeSession": "unsupported",
+    "serverControlledTrials": "unverified",
+    "serverScoring": "unsupported",
+    "individualEntryCodes": "unverified"
+  },
+  "research_decisions_that_remain_tbd": [
+    "T01",
+    "T02",
+    "T03",
+    "T04",
+    "T05",
+    "T06",
+    "T07",
+    "T08",
+    "T09"
+  ]
+}

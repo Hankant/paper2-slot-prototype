@@ -1,60 +1,79 @@
 # 公共接口规格
 
-状态：`DRAFT`，G0 前不能宣称已冻结。本文是当前开发接口入口；来源快照仅供追溯。
+版本：**0.3.0，2026-09-18 工程基线**。本轮修复 0.2.0 的接口集成缺陷；正式研究方案仍 unreleased。精确类型以 src/contracts/index.ts 及 validators.ts 为准。
 
-## 1. 核心类型和职责
+## 服务分工
 
-| 公共对象 | 必须表达的含义 |
-|---|---|
-| Session | 随机研究编号、会话身份、研究版本、分组、批次、后端及保存范围 |
-| ExperimentState | 当前阶段、题号、最后确认事件、完成状态 |
-| PublicTrial | 当前阶段可见的历史和说明；不含正式未来结果、私有种子 |
-| Feedback | 合法提交后可见的实际中奖者、最终预测、积分及评分版本 |
-| Event | 版本化响应及过程记录，见下节 |
-| SaveReceipt | 哪些事件已持久保存、哪些被拒绝或未确认 |
-| Capabilities | `supported / unsupported / unverified`，不能混用 |
+| 接口           | 方法                          | 约定                                                 |
+| -------------- | ----------------------------- | ---------------------------------------------------- |
+| SessionService | openSession(credential)       | 凭证内带 client_versions；建立或按所声明策略恢复会话 |
+| SessionService | loadState(session)            | 返回服务确认的状态                                   |
+| SessionService | describeCapabilities()        | 如实返回 supported/unsupported/unverified            |
+| SessionService | finishSession(session)        | 必需事件齐备后返回完成回执                           |
+| TrialService   | loadTrial(session, trialId)   | 只提供当前阶段可见内容                               |
+| TrialService   | loadAdvice(session, trialId)  | 阶段条件满足后返回 RevealedAdviceBlock               |
+| TrialService   | getFeedback(session, trialId) | 最终答案确认后返回评分；不能重抽结果或重复记分       |
+| ResultStore    | saveEvents(session, events)   | 所有参与者写入的唯一入口，逐事件返回 SaveReceipt     |
 
-材料的完整 `PrivateTrial` 仅由生成器、模拟适配器或服务器使用。LocalDemo 可在本机持有答案，但标记仅演示，不能因此将它打包进正式版。
+删除 0.2.0 的 recordSourceChoice：来源选择和最终答案不再通过另一条无回执的方法写入。所有重试使用同一 event_id 与相同内容，内容冲突必须报 EVENT_CONFLICT。
 
-## 2. 接口方法
+## 事件和载荷
 
-| 接口 | 方法 | 语义 |
-|---|---|---|
-| SessionService | openSession(entryCredential, versions) | 验证入口、建立或按明确策略恢复会话，固定条件 |
-| SessionService | loadState(session) | 返回已确认状态，不信任浏览器提交的旧状态 |
-| TrialService | loadTrial(session, trialId) | 返回此阶段可见材料；建议是否可见受状态和配置约束 |
-| ResultStore | saveEvents(session, events) | 逐事件回执；可能部分成功，不默认为全成功 |
-| TrialService | getFeedback(session, trialId) | 选择已确认后返回结果；不能重抽结果或重复计分 |
-| SessionService | finishSession(session) | 必需事件齐全才完成，不以浏览器单方面声明结束 |
+封套包含 schema_version、contract_version、protocol_version、material_version、client_version、session_id、participant_id、event_id、sequence_no、trial_id（按事件要求）、phase、event_type、client_timestamp、elapsed_ms、payload。
 
-G0 将这些约定转为精确 TypeScript 签名。认证令牌由适配器私有管理，领域对象不在 UI 中暴露凭证。
+EventEnvelope 是按 event_type 区分的 TypeScript 联合类型；来自网络/缓存的 unknown 先用 parseEventEnvelope 校验。运行时保留已验证的 payload；不能将其丢弃后称为已保存。
 
-## 3. 原始事件及数据字典
+| 事件                         | payload                                            | trial_id                          |
+| ---------------------------- | -------------------------------------------------- | --------------------------------- |
+| consent_recorded             | version                                            | 禁止；具体同意/退出流程待正式实现 |
+| profile_submitted            | fields                                             | 禁止；真实字段仍待研究确定        |
+| comprehension_answered       | question_id, answer, correct                       | 可选，说明页不伪造试次            |
+| prediction_submitted         | machine_id, display_position                       | 必需；独立预测                    |
+| confidence_submitted         | confidence_percent                                 | 必需；0—100                       |
+| source_selected              | source                                             | 必需；不要求此时已有最终答案      |
+| advice_revealed              | advice_id, revealed_at_phase                       | 必需；建议已可见后记录            |
+| final_prediction_submitted   | machine_id, display_position, changed_after_advice | 必需；与独立预测分开              |
+| feedback_presented           | presented_at_ms                                    | 必需；先获取/展示反馈，再记录     |
+| visibility_changed           | element_id, visible                                | 可选，会话级页面可不属于试次      |
+| session_completion_requested | ack_required_event_count                           | 禁止                              |
 
-公共封套：`schema_version, contract_version, protocol_version, material_version, client_version, session_id, participant_id, event_id, sequence_no, trial_id?, phase, event_type, client_timestamp, elapsed_ms, payload`。
+source 的 human/ai/mixed/no_advice_shown 是接口保留值，不代表正式实验条件已确认。当前单题预览仅用 human（明确表示自己）和 ai（模拟建议），不实施 mixed 条件。没有建议的正式阶段应另明确完成规则，不伪造 source_selected。
 
-session 另外记录 `participation_mode`（现场/远程/未知）、`device_class`、`recruitment_batch`、`adapter_version`、`provider`；设备不决定参与方式。
+## 本轮可运行的单题顺序
 
-候选事件：`consent_recorded, profile_submitted, comprehension_answered, prediction_submitted, confidence_submitted, source_selected, feedback_presented, visibility_changed, session_completion_requested`。权威开奖和评分记录由实验服务生成，并标记来源，不接受浏览器任意覆盖。
+单题预览跳过知情同意与资料页，不收集个人资料；从 main 开始。演示固定为：
 
-原始反应时单位为毫秒，由本地单调时钟计算；服务器接收时间分开记录。信心 0—100；正确率内部统一 0—1，并保存正确题数和分母。机器逻辑 ID 与屏幕位置分别保存。
+```text
+独立预测保存 → 信心保存 → 来源选择保存 → 读取并展示建议
+→ 建议展示事件保存 → 最终预测保存 → 读取并展示反馈
+→ 反馈展示事件保存 → 完成请求保存 → finishSession
+```
 
-逐题导出至少包括：历史材料编号、机器位置、个人预测、信心、建议、建议是否已揭示、来源选择、最终预测、实际中奖者、双方是否预测命中、积分、建议目标/实际/披露正确率、校准分子分母。
+这是明确的模拟设置，正式 T03 不因此定稿。配置中的 after_choice 在本预览指独立预测后，预览还要求来源选择先确认；before_choice/none 与多题实验仍由 B/C/D 按将来选定协议实施，不声称该单题服务覆盖所有模式。
 
-## 4. 保存与状态
+Preview 的 loadAdvice/反馈读取可重复；评分是固定开奖结果与已保存最终答案比较。最高历史命中率但没中奖仍为错误。source_selected 与最终答案可不同，并分别记录；不把答案一致自动当作采纳。
 
-SaveReceipt 必含 `acknowledged_event_ids, rejected_events, unconfirmed_event_ids, persistence_scope, session_status`；远程已保存时另有服务器确认时间。保存范围区分 `memory / browser_local / remote`，只有经过验证的远程回执能显示“已上传”。
+## 可见数据与评分
 
-相同 event_id 同内容重试不重复计分；不同内容报 EVENT_CONFLICT。先展示反馈必须已满足保存及阶段要求。HTTP 200 不是保存语义本身。
+- HiddenAdviceBlock 只含 advice_id 与 revealed:false；任何目标机器、位置、copy 都会被拒绝。
+- RevealedAdviceBlock 才包含目标机器、显示位置和 copy，revealed 必须为 true。PublicTrial 在揭示前可省略 advice 或只带 hidden metadata。
+- 机器逻辑编号、屏幕位置分别保存，并要求试次内唯一；揭示建议的目标必须与机器映射一致。
+- TrialFeedback 包含实际中奖机器、独立/最终是否命中、积分、scoring_version、反馈释放前所需事件类型。required_event_types 不得包含 feedback_presented，避免循环前置条件。
+- 原始事件与反馈通过 trial_id 关联；JSON 下载包含两者。全套逐题 CSV、校准分子分母、材料清单等仍是 G1/G2 要求。
+- 正确率内部 0—1、信心 0—100、时间毫秒。参与方式与设备类型分开；预览不推断真实身份或采样来源。
 
-最小阶段：`entry → consent → profile → instructions → practice → calibration → main → finalizing → completed`；正式题内部 `history → prediction → confidence → advice/source（顺序由配置指定）→ feedback`。无建议阶段不生成虚假 source_selected。
+## 保存范围与能力
 
-错误统一为 `INVALID_ENTRY_CODE, SESSION_EXPIRED, INVALID_EVENT, EVENT_CONFLICT, OUT_OF_ORDER, RATE_LIMITED, NETWORK_UNAVAILABLE, PERSISTENCE_UNCONFIRMED, UNSUPPORTED_CAPABILITY`，带 retryable 和可展示信息。
+SaveReceipt 包含 acknowledged_event_ids、rejected_events、unconfirmed_event_ids、persistence_scope、session_status、persisted_at、receipt_id、current_phase。三个 ID 集合内部唯一且互斥。remote 要求确认时间与回执 ID；memory/browser_local 对应字段为 null。HTTP 200 不等于远程持久保存。
 
-## 5. 能力与版本
+capabilitiesSchema 只验证声明形状，允许 unsupported/unverified。satisfiesRequired 另检查生产最低条件 persistentResults、idempotentWrites、serverControlledTrials；通过只是必要条件，真实部署还需协议所需能力和实际保存证据。
 
-必查 `persistentResults, idempotentWrites, resumeSession, serverControlledTrials, serverScoring, individualEntryCodes`。JATOS、HTTP 或云表格的名字不构成能力已通过的证据。
+one-trial-preview 仅在内存保留事件；已验证内存幂等，不支持刷新恢复、独立参与码、服务端开奖/计分或持久保存。它明确返回 memory。它的完整答案存在浏览器代码中，绝不能作为正式实验服务。
 
-G0 建立必需能力配置；本地演示允许能力不足但明确标识，正式模式不得静默降级。切换后端默认只作用于新会话；历史数据迁移独立执行。
+真实适配器仍需验证请求和回执对应、身份隔离、部分成功、断网/刷新恢复及持久存储。切换后端默认仅作用于新会话。
 
-版本变化由 A 维护。B/C/D 需要改接口时在自己的 handoff 提交变更请求：现有字段、拟改内容、原因、影响模块和兼容策略；A 更新版本后统一通知。
+## 版本与责任
+
+当前 contract/schema/client 为 0.3.0，演示材料为 0.3.0，demo 配置为 demo-0.3.0；正式 protocol=unreleased。已有实验会话不得中途换版。本次没有真实样本需要迁移。
+
+A 唯一维护共享接口、依赖、bootstrap 和版本。B/C/D 按职责表实施；修改字段先交 A 协调。推荐公共 import '@contracts'，裸别名与子路径在 TS/Vite/Vitest 三处均配置，并经过真实消费者验证。

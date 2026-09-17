@@ -1,0 +1,3 @@
+# tests/e2e is reserved for Q (independent acceptance) in G3 per docs/PARALLEL_TASKS.md.
+# G0 leaves the directory empty on purpose: no Playwright browsers are downloaded
+# and `npm run test:e2e` returns "No tests found" — this failure is by design.

@@ -1,5 +1,7 @@
 # 结构与实施计划
 
+当前实施补记（2026-09-18）：用户授权 G0 修复并增加单题交互预览；已建立 preview UI、内存模拟服务、契约流程与浏览器测试。它们是有限预览，后续 jsPsych 多题流程、可靠保存队列和真实后端仍按下列波次实施。当前状态以 STATUS 为准；下列“本轮不实施”是最初目录规划的范围说明。
+
 ## 1. 开发目录
 
 ```text
@@ -12,6 +14,7 @@ paper2-slot-prototype/
     PARALLEL_TASKS.md
     STATUS.md
     ACCEPTANCE.md
+    AGENT_CONSTRUCTION_GUIDE.md
   src/
     domain/             # 无 UI、无网络的评分规则与事件处理
     contracts/          # 公共类型、方法和运行时校验
@@ -25,7 +28,7 @@ paper2-slot-prototype/
     bootstrap.ts        # 后续由协调 agent 创建，组装依赖
   config/               # 显式 demo 配置与正式配置模板
   materials/demo/       # 模拟材料及版本化清单
-  analysis/             # Python 材料生成、审计和导出整理
+  analysis/             # TypeScript 材料生成、审计和导出整理
   tests/
     contracts/
     domain/
@@ -36,7 +39,7 @@ paper2-slot-prototype/
   server/               # 若选定平台缺少必需能力，在这里补充
   deploy/               # 仅已选后端的部署模板
   sources/              # 历史只读快照和 MANIFEST.json
-  handoffs/             # 分角色交接，协调者汇总
+  handoffs/             # 分角色交接和 LATEST 检查点，协调者汇总
   artifacts/            # 运行输出，忽略提交
 ```
 
@@ -55,6 +58,7 @@ domain 不导入 jsPsych 或 SDK；contracts 不导入实现；适配器不导�
 ### G0：公共基础，协调 agent 先完成
 
 - 确认没有覆盖现有修改，初始化最小 TypeScript/Vite/jsPsych 工程并锁版本。
+- 按 AGENT_CONSTRUCTION_GUIDE 设置统一 TypeScript、npm、ESLint/Prettier、Vitest/Playwright 和标准验证命令；初始化检查点。依赖安装和脚本验证完成前不声称工具链可用。
 - 将 CONTRACTS 草案转为公共类型、校验器和接口验收样例，冻结 `contract_version`。
 - 显式选择一组仅用于演示的候选设置；把 T03 时点写入 demo 配置，不默认代表正式研究决定。
 - 定义公共事件、试次阶段、稳定错误及统一保存回执；建立最小固定虚拟 fixture。

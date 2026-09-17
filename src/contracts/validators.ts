@@ -1,0 +1,545 @@
+/**
+ * Runtime validators for the public envelope and trial payloads.
+ *
+ * After the Q G0 review (R1–R6), this module enforces:
+ *   - event envelope keeps its `payload` field round-trip; payload shape is
+ *     discriminated by `event_type`
+ *   - trial-level events MUST carry `trial_id`; entry-level events MUST NOT
+ *   - SaveReceipt scopes are consistent (`remote` ⇔ persisted_at+receipt_id)
+ *   - SaveReceipt event-id sets are pairwise disjoint and internally unique
+ *   - PublicTrial machines carry unique `machine_id` and `display_position`
+ *     and reference a real machine in the advice target
+ */
+
+import { z } from 'zod';
+
+import { CAPABILITY_KEYS } from './capabilities.js';
+import type { EventEnvelope } from './envelopes.js';
+import { ERROR_CODES } from './errors.js';
+import {
+  DEVICE_CLASSES,
+  ENTRY_LEVEL_EVENTS,
+  EXPERIMENT_EVENT_TYPES,
+  PARTICIPATION_MODES,
+  TRIAL_LEVEL_EVENTS,
+} from './envelopes.js';
+import { PERSISTENCE_SCOPES, SESSION_STATUSES } from './persistence-types.js';
+import { SOURCE_CHOICES } from './trial-types.js';
+
+const semverTag = z.string().regex(/^\d+\.\d+\.\d+$/, 'expected semver tag');
+
+const participationMode = z.enum(PARTICIPATION_MODES);
+const deviceClass = z.enum(DEVICE_CLASSES);
+const phase = z.enum([
+  'entry',
+  'consent',
+  'profile',
+  'instructions',
+  'practice',
+  'calibration',
+  'main',
+  'finalizing',
+  'completed',
+  'cancelled',
+]);
+const eventType = z.enum(EXPERIMENT_EVENT_TYPES);
+const persistenceScope = z.enum(PERSISTENCE_SCOPES);
+const sessionStatus = z.enum(SESSION_STATUSES);
+const errorCode = z.enum(ERROR_CODES);
+const sourceChoice = z.enum(SOURCE_CHOICES);
+
+const slotDisplayPosition = z.enum(['left', 'center', 'right']);
+
+const baseEnvelopeShape = {
+  schema_version: semverTag,
+  contract_version: semverTag,
+  protocol_version: z.string().min(1),
+  material_version: z.string().min(1),
+  client_version: semverTag,
+  session_id: z.string().min(1),
+  participant_id: z.string().min(1),
+  event_id: z.string().uuid(),
+  sequence_no: z.number().int().nonnegative(),
+  phase,
+  event_type: eventType,
+  client_timestamp: z.string().datetime(),
+  elapsed_ms: z.number().int().nonnegative(),
+} as const;
+
+/**
+ * Per-event-type payload schemas. Returning a schema (not `null`) means
+ * the payload is required and validated; `null` means the event may omit
+ * the payload (entry-level scaffolding events).
+ */
+const payloadSchemas: Readonly<Record<z.infer<typeof eventType>, z.ZodTypeAny | null>> = {
+  consent_recorded: z.object({
+    version: z.string().min(1),
+  }),
+  profile_submitted: z.object({
+    fields: z.record(z.string(), z.unknown()),
+  }),
+  comprehension_answered: z.object({
+    question_id: z.string().min(1),
+    answer: z.unknown(),
+    correct: z.boolean().nullable(),
+  }),
+  prediction_submitted: z.object({
+    machine_id: z.string().min(1),
+    display_position: slotDisplayPosition,
+  }),
+  confidence_submitted: z.object({
+    confidence_percent: z.number().int().min(0).max(100),
+  }),
+  source_selected: z
+    .object({
+      source: sourceChoice,
+    })
+    .strict(),
+  final_prediction_submitted: z.object({
+    machine_id: z.string().min(1),
+    display_position: slotDisplayPosition,
+    changed_after_advice: z.boolean(),
+  }),
+  advice_revealed: z.object({
+    advice_id: z.string().min(1),
+    revealed_at_phase: phase,
+  }),
+  feedback_presented: z.object({
+    presented_at_ms: z.number().int().nonnegative(),
+  }),
+  visibility_changed: z.object({
+    element_id: z.string().min(1),
+    visible: z.boolean(),
+  }),
+  session_completion_requested: z.object({
+    ack_required_event_count: z.number().int().nonnegative(),
+  }),
+};
+
+const payloadValidatorsByEventType = new Map<z.infer<typeof eventType>, z.ZodTypeAny | null>(
+  EXPERIMENT_EVENT_TYPES.map((type) => [type, payloadSchemas[type]] as const),
+);
+
+export const slotMachineSchema = z
+  .object({
+    machine_id: z.string().min(1),
+    display_position: slotDisplayPosition,
+    label: z.string().min(1),
+  })
+  .readonly();
+
+export const revealedAdviceBlockSchema = z
+  .object({
+    advice_id: z.string().min(1),
+    advice_target_machine_id: z.string().min(1),
+    advice_target_display_position: slotDisplayPosition,
+    copy: z.string().min(1),
+    revealed: z.literal(true),
+  })
+  .strict();
+
+export const hiddenAdviceBlockSchema = z
+  .object({
+    advice_id: z.string().min(1),
+    revealed: z.literal(false),
+  })
+  .strict();
+
+export const publicAdviceBlockSchema = z
+  .discriminatedUnion('revealed', [hiddenAdviceBlockSchema, revealedAdviceBlockSchema])
+  .readonly();
+
+function uniqueBy<T, K>(items: ReadonlyArray<T>, key: (item: T) => K): boolean {
+  const seen = new Set<K>();
+  for (const item of items) {
+    const k = key(item);
+    if (seen.has(k)) return false;
+    seen.add(k);
+  }
+  return true;
+}
+
+export const publicTrialSchema = z
+  .object({
+    trial_id: z.string().min(1),
+    trial_index: z.number().int().nonnegative(),
+    phase: z.enum(['practice', 'calibration', 'main']),
+    visible_history: z
+      .array(
+        z.object({
+          trial_id: z.string().min(1),
+          machine_id: z.string().min(1),
+          observed_hit_rate: z.number().min(0).max(1),
+        }),
+      )
+      .readonly(),
+    machines: z.array(slotMachineSchema).min(1).readonly(),
+    advice_timing: z.enum(['before_choice', 'after_choice', 'none']),
+    advice: publicAdviceBlockSchema.optional(),
+    material_version: semverTag,
+  })
+  .superRefine((value, ctx) => {
+    if (!uniqueBy(value.machines, (m) => m.machine_id)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'PublicTrial.machines machine_id values must be unique',
+        path: ['machines'],
+      });
+    }
+    if (!uniqueBy(value.machines, (m) => m.display_position)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'PublicTrial.machines display_position values must be unique',
+        path: ['machines'],
+      });
+    }
+    if (value.advice_timing === 'none' && value.advice !== undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'PublicTrial.advice must be omitted when advice_timing === "none"',
+        path: ['advice'],
+      });
+    }
+    if (value.advice?.revealed === true) {
+      const advice = value.advice;
+      const referenced = value.machines.find(
+        (m) => m.machine_id === advice.advice_target_machine_id,
+      );
+      if (referenced === undefined) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'PublicTrial.advice.advice_target_machine_id is not in machines',
+          path: ['advice', 'advice_target_machine_id'],
+        });
+      } else if (referenced.display_position !== value.advice.advice_target_display_position) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message:
+            'PublicTrial.advice.advice_target_display_position does not match machines entry',
+          path: ['advice', 'advice_target_display_position'],
+        });
+      }
+    }
+  });
+
+export const participantPredictionSchema = z
+  .object({
+    machine_id: z.string().min(1),
+    display_position: slotDisplayPosition,
+    confidence_percent: z.number().int().min(0).max(100),
+    elapsed_ms: z.number().int().nonnegative(),
+  })
+  .readonly();
+
+export const finalPredictionRecordSchema = z
+  .object({
+    independent: participantPredictionSchema,
+    final: participantPredictionSchema,
+    source_choice: sourceChoice,
+    changed_after_advice: z.boolean(),
+  })
+  .readonly();
+
+export const trialFeedbackSchema = z
+  .object({
+    trial_id: z.string().min(1),
+    actual_winner_machine_id: z.string().min(1),
+    participant_predicted_winner: z.boolean(),
+    advice_target_hit: z.boolean().nullable(),
+    advice_actual_hit: z.boolean().nullable(),
+    points_awarded: z.number().int(),
+    scoring_version: semverTag,
+    independent_correct: z.boolean(),
+    final_correct: z.boolean(),
+    required_event_types: z
+      .array(z.enum(EXPERIMENT_EVENT_TYPES))
+      .min(1)
+      .refine(
+        (types) => !types.includes('feedback_presented'),
+        'Feedback cannot require its own presentation',
+      )
+      .readonly(),
+  })
+  .readonly();
+
+export const entryCredentialSchema = z.object({
+  entry_code: z.string().min(8, 'entry_code must be at least 8 chars'),
+  observed_participation_mode: participationMode,
+  observed_device_class: deviceClass,
+  client_versions: z.object({
+    protocol_version: z.string().min(1),
+    contract_version: semverTag,
+    material_version: semverTag,
+    client_version: semverTag,
+  }),
+});
+
+export const sessionMetadataSchema = z.object({
+  participation_mode: participationMode,
+  device_class: deviceClass,
+  recruitment_batch: z.string().min(1),
+  adapter_version: z.string().min(1),
+  provider: z.string().min(1),
+});
+
+export const sessionSchema = z.object({
+  session_id: z.string().min(1),
+  participant_id: z.string().min(1),
+  recruitment_batch: z.string().min(1),
+  group_assignment: z.string().min(1),
+  study_id: z.string().min(1),
+  protocol_version: z.string().min(1),
+  material_version: semverTag,
+  contract_version: semverTag,
+  adapter_version: z.string().min(1),
+  provider: z.string().min(1),
+  metadata: sessionMetadataSchema,
+});
+
+export const experimentStateSchema = z.object({
+  session_id: z.string().min(1),
+  phase,
+  trial_index: z.number().int().nonnegative(),
+  last_confirmed_event_id: z.string().min(1).nullable(),
+  last_confirmed_sequence_no: z.number().int().nonnegative(),
+  completed: z.boolean(),
+  reconciliation_required: z.boolean(),
+});
+
+export const eventEnvelopeSchema = z
+  .object({
+    ...baseEnvelopeShape,
+    trial_id: z.string().min(1).optional(),
+    payload: z.unknown(),
+  })
+  .superRefine((value, ctx) => {
+    const event_type = (value as { event_type: z.infer<typeof eventType> }).event_type;
+    const trial_id = (value as { trial_id?: string | undefined }).trial_id;
+    const payload = (value as { payload: unknown }).payload;
+
+    if ((TRIAL_LEVEL_EVENTS as readonly string[]).includes(event_type) && trial_id === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `trial_id is required for ${event_type}`,
+        path: ['trial_id'],
+      });
+    }
+    if ((ENTRY_LEVEL_EVENTS as readonly string[]).includes(event_type) && trial_id !== undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `${event_type} must not carry trial_id`,
+        path: ['trial_id'],
+      });
+    }
+
+    const schema = payloadValidatorsByEventType.get(event_type) ?? null;
+    if (schema === null) {
+      if (payload !== undefined && payload !== null) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `${event_type} must not carry a payload`,
+          path: ['payload'],
+        });
+      }
+      return;
+    }
+
+    if (payload === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `${event_type} requires a payload`,
+        path: ['payload'],
+      });
+      return;
+    }
+
+    const parsed = schema.safeParse(payload);
+    if (!parsed.success) {
+      for (const issue of parsed.error.issues) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `payload does not match ${event_type} shape: ${issue.message}`,
+          path: ['payload', ...issue.path],
+        });
+      }
+    }
+  });
+
+/** Narrow only after the per-event payload and envelope checks have succeeded. */
+export function parseEventEnvelope(value: unknown): EventEnvelope {
+  return eventEnvelopeSchema.parse(value) as EventEnvelope;
+}
+
+export const rejectedEventRecordSchema = z.object({
+  event_id: z.string().uuid(),
+  reason_code: z.string().min(1),
+  reason_message: z.string(),
+});
+
+export const saveReceiptSchema = z
+  .object({
+    acknowledged_event_ids: z.array(z.string().uuid()).readonly(),
+    rejected_events: z.array(rejectedEventRecordSchema).readonly(),
+    unconfirmed_event_ids: z.array(z.string().uuid()).readonly(),
+    persistence_scope: persistenceScope,
+    session_status: sessionStatus,
+    persisted_at: z.string().datetime().nullable(),
+    receipt_id: z.string().min(1).nullable(),
+    current_phase: phase,
+  })
+  .superRefine((value, ctx) => {
+    if (!uniqueBy(value.acknowledged_event_ids, (id) => id)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'acknowledged_event_ids must be unique within the receipt',
+        path: ['acknowledged_event_ids'],
+      });
+    }
+    if (!uniqueBy(value.rejected_events, (r) => r.event_id)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'rejected_events event_id values must be unique within the receipt',
+        path: ['rejected_events'],
+      });
+    }
+    if (!uniqueBy(value.unconfirmed_event_ids, (id) => id)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'unconfirmed_event_ids must be unique within the receipt',
+        path: ['unconfirmed_event_ids'],
+      });
+    }
+
+    const acked = new Set(value.acknowledged_event_ids);
+    const rejectedIds = new Set(value.rejected_events.map((r) => r.event_id));
+    const unconfirmed = new Set(value.unconfirmed_event_ids);
+    const overlap = (a: ReadonlySet<string>, b: ReadonlySet<string>, label: string): void => {
+      for (const id of a) {
+        if (b.has(id)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: `event_id ${id} appears in ${label} and another list`,
+            path: ['acknowledged_event_ids'],
+          });
+        }
+      }
+    };
+    overlap(acked, rejectedIds, 'acknowledged');
+    overlap(acked, unconfirmed, 'acknowledged');
+    overlap(rejectedIds, unconfirmed, 'rejected_events');
+
+    if (value.persistence_scope === 'remote') {
+      if (value.persisted_at === null) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'persistence_scope=remote requires persisted_at to be non-null',
+          path: ['persisted_at'],
+        });
+      }
+      if (value.receipt_id === null) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'persistence_scope=remote requires receipt_id to be non-null',
+          path: ['receipt_id'],
+        });
+      }
+    } else {
+      if (value.persisted_at !== null) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `persistence_scope=${value.persistence_scope} requires persisted_at to be null`,
+          path: ['persisted_at'],
+        });
+      }
+      if (value.receipt_id !== null) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `persistence_scope=${value.persistence_scope} requires receipt_id to be null`,
+          path: ['receipt_id'],
+        });
+      }
+    }
+  });
+
+const capabilityStatus = z.enum(['supported', 'unsupported', 'unverified']);
+
+const capabilityMapSchema = z
+  .object(
+    Object.fromEntries(CAPABILITY_KEYS.map((key) => [key, capabilityStatus])) as Record<
+      (typeof CAPABILITY_KEYS)[number],
+      typeof capabilityStatus
+    >,
+  )
+  .readonly();
+
+export const capabilitiesSchema = z.object({
+  provider: z.string().min(1),
+  adapter_version: z.string().min(1),
+  capabilities: capabilityMapSchema,
+});
+
+export const contractErrorSchema = z.object({
+  code: errorCode,
+  message: z.string(),
+  retryable: z.enum(['retry', 'no-retry', 'user-action']),
+  details: z.record(z.unknown()).optional(),
+});
+
+/* Demo configuration schema — kept here so the loader can lean on the same
+ * runtime validator as the rest of the public contract surface. */
+export const sourceChoiceLiteral = z.enum(SOURCE_CHOICES);
+
+export const demoConfigSchema = z
+  .object({
+    config_version: z.string().min(1),
+    simulation: z.literal(true),
+    provider: z.string().min(1),
+    study_id: z.string().min(1),
+    contract_version: semverTag,
+    protocol_version: z.string().min(1),
+    material_version: semverTag,
+    adapter_version: z.string().min(1),
+    client_version: semverTag,
+    entry_code_placeholder: z.string().min(1),
+    task_definition: z.string().min(1),
+    phase_order: z.array(z.string()).min(1),
+    trial_phases: z.array(z.string()).min(1),
+    advice_timing: z.enum(['before_choice', 'after_choice', 'none']),
+    machines_per_trial: z.number().int().min(1),
+    machine_assignment_strategy: z.string().min(1),
+    feedback_mode: z.enum(['after_each_trial', 'delayed']),
+    point_system: z.object({
+      scheme: z.string().min(1),
+      correct_prediction_points: z.number().int().min(0),
+      incorrect_prediction_points: z.number().int(),
+      no_real_money: z.literal(true),
+    }),
+    personal_data: z.object({
+      fields: z.array(z.string()).readonly(),
+      retention_days: z.number().int().min(0),
+      retention_note: z.string().min(1).optional(),
+      no_real_personal_data: z.literal(true),
+    }),
+    capabilities: capabilityMapSchema,
+    research_decisions_that_remain_tbd: z.array(z.string()).readonly(),
+    phase_trial_counts: z
+      .object({
+        practice: z.number().int().min(0),
+        calibration: z.number().int().min(0),
+        main: z.number().int().min(0),
+      })
+      .optional(),
+  })
+  .strict();
+
+export type PublicTrialInput = z.input<typeof publicTrialSchema>;
+export type EntryCredentialInput = z.input<typeof entryCredentialSchema>;
+export type SessionInput = z.input<typeof sessionSchema>;
+export type ExperimentStateInput = z.input<typeof experimentStateSchema>;
+export type EventEnvelopeInput = z.input<typeof eventEnvelopeSchema>;
+export type SaveReceiptInput = z.input<typeof saveReceiptSchema>;
+export type CapabilitiesInput = z.input<typeof capabilitiesSchema>;
+export type DemoConfigInput = z.input<typeof demoConfigSchema>;
+export type TrialFeedbackInput = z.input<typeof trialFeedbackSchema>;
+export type PublicAdviceBlockInput = z.input<typeof publicAdviceBlockSchema>;
+export type FinalPredictionRecordInput = z.input<typeof finalPredictionRecordSchema>;
