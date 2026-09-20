@@ -1,6 +1,8 @@
 # Paper 2：老虎机实验原型
 
-更新时间：2026-09-18。当前接口基线 **0.3.0**。工程基础已实现，并提供一题可点击模拟预览；完整 jsPsych 实验、持久保存与远程后台尚未实现。
+更新时间：2026-09-19。当前接口基线 **0.3.0**。单轮服务器采集试点已实现，本机持久保存、刷新恢复、导出可用；完整 jsPsych 多轮实验、真实 AI 与公网部署仍未完成。
+
+优先使用 [数据收集试点运行说明](docs/COLLECTION_PILOT.md)：`npm run build:all` 后运行 `npm run collect:local`，打开 http://127.0.0.1:5200/collect.html ，本机默认参与码 `PAPER2-LOCAL`。以下旧预览地址仍只保存页面内存。
 
 ## 直接体验
 
@@ -10,7 +12,9 @@
 npm run dev -- --port 5197
 ```
 
-打开 [一题模拟预览](http://127.0.0.1:5197/preview.html)，或 [工程状态页](http://127.0.0.1:5197/)。只在运行服务的这台电脑可用，不是可分享的线上地址。
+优先打开 [新版老虎机与聊天预览](http://127.0.0.1:5197/preview-immersive.html)。旧版 [一题模拟预览](http://127.0.0.1:5197/preview.html)，或 [工程状态页](http://127.0.0.1:5197/)。只在运行服务的这台电脑可用，不是可分享的线上地址。
+
+新版入口现为：知情同意 → 操作说明 → 开始实验。不同意可退出，确认框不预选；当前同意书是本地演示草稿，正式联系方式、报酬、保存期限和审批等仍待确认。文本集中在 src/domain/entry-materials.ts。
 
 预览支持：选机器、调整信心、锁定独立预测、选自己/模拟 AI、揭示建议、确认最终答案、看反馈、下载 JSON、重新体验。固定模拟建议 B、开奖 C；A 的模拟历史命中率最高，但本轮预测 A 仍算错。没有真实个人资料、支付或上传。仅内存保存，刷新清空；下载的 JSON 包含原始事件和反馈。
 
@@ -18,7 +22,11 @@ npm run dev -- --port 5197
 
 ## 接手顺序
 
-新增规划：[老虎机与 AI 聊天界面升级方案](docs/IMMERSIVE_UI_PLAN.md)。涵盖机柜/转轮、高仿真聊天、流式回答、DeepSeek 接口与分阶段验收；状态为 PROPOSED，尚未实施，现有 0.3.0 页面保持原样。
+新增规划：[老虎机与 AI 聊天界面升级方案](docs/IMMERSIVE_UI_PLAN.md)。涵盖机柜/转轮、高仿真聊天、流式回答、DeepSeek 接口与分阶段验收。
+
+**U0（A 协调）已交付：** [chat-events.ts](src/contracts/chat-events.ts) / [chat-service.ts](src/contracts/chat-service.ts) / [CHAT_STATE_TABLE](docs/CHAT_STATE_TABLE.md) / 18 个契约测试落到 `contract_version = 0.3.0` 上的加法（无 breaking）。B 可读状态表出 U1 视觉稿；C 在 U2 实现 `LocalChatAdapter`，配合本轮契约测试；Q 在 U3 用 Playwright 跑端到端。完整交接见 [A 的 U0 handoff](handoffs/A/2026-09-18_imm-u0-stream-interfaces.md)。
+
+Codex 已完成新版单题机柜、脚本聊天服务、阶段控制与数据修复，并通过浏览器验证。当前实施事实与字段含义见 [实现说明](docs/ATELIER_IMPLEMENTATION.md)。U3 完整 jsPsych 集成及 U5 真实模型仍待实施；新增 collect 入口已另接 SQLite 持久后台；上述 U0 交接为历史基线。
 
 1. [AGENTS](AGENTS.md) 与 [Agent 施工指南](docs/AGENT_CONSTRUCTION_GUIDE.md)。
 2. [当前决策](docs/DECISIONS.md)、[接口规格](docs/CONTRACTS.md)、[看板](docs/STATUS.md)。
@@ -43,7 +51,7 @@ npm run test:e2e
 
 端到端测试使用本机安装的 Microsoft Edge（Playwright channel=msedge）。其他环境需要先准备对应浏览器并由 A 统一调整配置。桌面浏览器中的手机视口不等于真机验证。
 
-build 同时生成 index.html 与 preview.html，preview 命令可检查构建产物。代码规范覆盖 src、config、tests、根 TS 配置及后续 analysis/server 下的 TS；来源快照和历史交接不参与自动修复。
+build 同时生成 index.html、preview.html 与 preview-immersive.html，preview 命令可检查构建产物。代码规范覆盖 src、config、tests、根 TS 配置及后续 analysis/server 下的 TS；来源快照和历史交接不参与自动修复。
 
 ## 目录
 

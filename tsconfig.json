@@ -28,6 +28,6 @@
     },
     "types": ["vitest/globals"]
   },
-  "include": ["src/**/*.ts", "tests/**/*.ts", "src/**/*.json"],
+  "include": ["src/**/*.ts", "tests/**/*.ts", "src/**/*.json", "server/**/*.ts"],
   "exclude": ["node_modules", "dist", ".vite", "coverage"]
 }

@@ -1,6 +1,7 @@
 node_modules/
 *.tsbuildinfo
 dist/
+dist-server/
 .vite/
 coverage/
 .venv/
@@ -24,3 +25,8 @@ config/*.private.*
 test-results/
 playwright-report/
 playwright/.cache/
+
+*.sqlite-wal
+*.sqlite-shm
+*.db-wal
+*.db-shm

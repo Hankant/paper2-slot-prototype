@@ -22,7 +22,14 @@ module.exports = {
     '@typescript-eslint/no-non-null-assertion': 'warn',
     'no-console': ['warn', { allow: ['warn', 'error'] }],
   },
-  ignorePatterns: ['dist/**', 'node_modules/**', 'coverage/**', 'artifacts/**', '.vite/**'],
+  ignorePatterns: [
+    'dist/**',
+    'dist-server/**',
+    'node_modules/**',
+    'coverage/**',
+    'artifacts/**',
+    '.vite/**',
+  ],
   overrides: [
     {
       files: ['tests/**/*.ts', 'src/contracts/**/*.ts'],

@@ -23,6 +23,7 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
     open: false,
+    proxy: { '/api': 'http://127.0.0.1:5200' },
   },
   preview: {
     host: '127.0.0.1',
@@ -34,6 +35,10 @@ export default defineConfig({
       input: {
         status: fileURLToPath(new URL('./src/ui/index.html', import.meta.url)),
         preview: fileURLToPath(new URL('./src/ui/preview.html', import.meta.url)),
+        collect: fileURLToPath(new URL('./src/ui/collect.html', import.meta.url)),
+        'preview-immersive': fileURLToPath(
+          new URL('./src/ui/preview-immersive.html', import.meta.url),
+        ),
       },
     },
     outDir: '../../dist',

@@ -1,0 +1,28 @@
+{
+  "task_id": "COLLECT-SERVER-RETRY",
+  "status": "candidate_success",
+  "changed_files": [
+    "server/app.ts",
+    "server/main.ts",
+    "server/node-sqlite.d.ts",
+    "src/adapters/local-demo/one-trial-preview.ts",
+    "tests/server/collection-server.spec.ts",
+    ".agents/results/COLLECT-SERVER.json",
+    ".agents/results/COLLECT-SERVER-RETRY.json"
+  ],
+  "validation_not_run": true,
+  "assumptions": [
+    "Controller runs Node 24 (node:sqlite DatabaseSync available); @types/node ^20 lacks node:sqlite typings so a narrow shim server/node-sqlite.d.ts is referenced from app.ts.",
+    "Consent version supplied in the entry acknowledgement becomes the adapter requireConsentVersion, so consent_recorded payload.version must match it (identical gating to local demo).",
+    "Seeded adapter keeps default adviceForSelf behavior (advice available for both human and ai source), matching the existing local demo default.",
+    "Session participant identity remains adapter-issued (virtual-preview) with credential participation_mode/device_class seeded into session.metadata.",
+    "Admin export auth failure returns 401 with code SESSION_EXPIRED because the frozen error catalog has no dedicated auth code.",
+    "Cross-origin and oversized-body rejections use status 403/413 with code INVALID_EVENT from the frozen catalog.",
+    "Server build config (Vite SSR -> dist-server/main.js) is owned by the controller per architecture; server/main.ts reads HOST/PORT/DATA_PATH/ENTRY_CODE/ADMIN_TOKEN/STATIC_DIR/SECURE_COOKIES and refuses missing secrets."
+  ],
+  "remaining": [
+    "External verifier must run: node_modules/vitest/vitest.mjs run tests/server (not executed in this sandbox).",
+    "Frontend collection entry (bootstrap-collection.ts) and HTTP adapter are separate tasks per architecture; this task only covers the server backend and its integration tests.",
+    "Existing local-demo preview behavior preserved via additive optional seedSession option (no default behavior change)."
+  ]
+}

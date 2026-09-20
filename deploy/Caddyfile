@@ -1,0 +1,26 @@
+# Caddy reverse proxy for the collection pilot.
+# DOMAIN is injected from the compose environment (deploy/.env).
+# Caddy obtains and renews HTTPS certificates automatically for DOMAIN.
+
+{$DOMAIN} {
+	# Same-origin app: Caddy forwards everything to the single Node server,
+	# which serves the static frontend (dist/) and the /api/* routes.
+	reverse_proxy collect:5200
+
+	# Security headers; the app itself enforces origin checks, HttpOnly
+	# SameSite=Strict cookies, and its own JSON error shape.
+	header {
+		-Server
+		X-Content-Type-Options nosniff
+		Referrer-Policy no-referrer
+	}
+
+	# Note: request rate limiting needs a non-standard Caddy plugin; it is
+	# intentionally not enabled here so this file works with the official
+	# caddy:2 image unchanged.
+
+	log {
+		output stderr
+		format json
+	}
+}

@@ -108,8 +108,21 @@ export interface TrialFeedback {
   readonly trial_id: string;
   readonly actual_winner_machine_id: string;
   readonly participant_predicted_winner: boolean;
+  /** Deprecated: original meaning was never specified. Null is NOT an exposure flag. */
   readonly advice_target_hit: boolean | null;
+  /** Whether presented advice predicts the actual winner; null when unexposed. */
   readonly advice_actual_hit: boolean | null;
+  /** Explicit descriptive fields introduced by the 0.3.1 scoring repair. */
+  readonly advice_evaluation?: {
+    readonly evaluation_version: '1.0.0';
+    readonly advice_exposed: boolean;
+    readonly advice_target_machine_id: string | null;
+    readonly advice_correct: boolean | null;
+    readonly independent_matches_advice: boolean | null;
+    readonly final_matches_advice: boolean | null;
+    readonly switched_to_advice: boolean | null;
+    readonly legacy_target_hit_reason: 'undefined_legacy_field';
+  };
   readonly points_awarded: number;
   readonly scoring_version: SemverTag;
   /** Independent vs final prediction correctness, separately tracked. */

@@ -1,0 +1,34 @@
+{
+  "task_id": "COLLECT-SERVER-RETRY",
+  "status": "candidate_success",
+  "exit_code": 0,
+  "timed_out": false,
+  "duration_seconds": 860,
+  "kimi_tokens": null,
+  "cost": null,
+  "tool_calls": null,
+  "base_commit": "90d90f24a9f0ee1f5ded4d1b4372b737116179e5",
+  "commit": "29f99d31fcf2f1cd68c46cbfe587805200d513b6",
+  "changed_files": [
+    "projects/paper2-slot-prototype/.agents/results/COLLECT-SERVER.json",
+    "projects/paper2-slot-prototype/src/adapters/local-demo/one-trial-preview.ts",
+    "projects/paper2-slot-prototype/.agents/results/COLLECT-SERVER-RETRY.json",
+    "projects/paper2-slot-prototype/server/app.ts",
+    "projects/paper2-slot-prototype/server/main.ts",
+    "projects/paper2-slot-prototype/server/node-sqlite.d.ts",
+    "projects/paper2-slot-prototype/tests/server/collection-server.spec.ts"
+  ],
+  "scope_violations": [],
+  "diff_lines": 1623,
+  "budget_exceeded": false,
+  "checks": [
+    {
+      "name": "server-tests",
+      "exit_code": 1,
+      "passed": false
+    }
+  ],
+  "requires_codex_review": true,
+  "os_sandbox": false,
+  "tool_scope_enforced": true
+}

@@ -1,0 +1,33 @@
+{
+  "task_id": "COLLECT-CLIENT-RETRY",
+  "status": "needs_review",
+  "exit_code": 1,
+  "timed_out": false,
+  "duration_seconds": 705,
+  "kimi_tokens": null,
+  "cost": null,
+  "tool_calls": null,
+  "base_commit": "f0c543e0274a2a0c6376d9c5ba1e485a4cc68856",
+  "commit": "c9db5958bea6f7a8054cd2b6994438d273382298",
+  "changed_files": [
+    "projects/paper2-slot-prototype/.agents/results/COLLECT-CLIENT.json",
+    "projects/paper2-slot-prototype/src/adapters/http/remote-adapter.ts",
+    "projects/paper2-slot-prototype/src/experiment/immersive-run.ts",
+    "projects/paper2-slot-prototype/src/ui/atelier/entry-screen.ts",
+    "projects/paper2-slot-prototype/src/ui/preview-immersive.ts",
+    "projects/paper2-slot-prototype/.agents/results/COLLECT-CLIENT-RETRY.json",
+    "projects/paper2-slot-prototype/src/bootstrap-collection.ts",
+    "projects/paper2-slot-prototype/src/domain/collection-materials.ts",
+    "projects/paper2-slot-prototype/src/ui/collect.html",
+    "projects/paper2-slot-prototype/src/ui/entry-collection.ts",
+    "projects/paper2-slot-prototype/tests/adapters/http-remote-adapter.spec.ts",
+    "projects/paper2-slot-prototype/tests/experiment/collection-restore.spec.ts"
+  ],
+  "scope_violations": [],
+  "diff_lines": 1409,
+  "budget_exceeded": false,
+  "checks": [],
+  "requires_codex_review": true,
+  "os_sandbox": false,
+  "tool_scope_enforced": true
+}

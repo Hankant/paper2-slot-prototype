@@ -1,0 +1,26 @@
+{
+  "task_id": "COLLECT-DEPLOY-FIX",
+  "status": "candidate_success",
+  "exit_code": 0,
+  "timed_out": false,
+  "duration_seconds": 275,
+  "kimi_tokens": null,
+  "cost": null,
+  "tool_calls": null,
+  "base_commit": "03d4fb083b948cf8bfa0db46d6f3e53bdc1d5cff",
+  "commit": "05f2f2ff931057e7388c02eb0a905ffaf622f8de",
+  "changed_files": [
+    "projects/paper2-slot-prototype/.dockerignore",
+    "projects/paper2-slot-prototype/Dockerfile",
+    "projects/paper2-slot-prototype/deploy/docker-compose.yml",
+    "projects/paper2-slot-prototype/docs/COLLECTION_DEPLOYMENT.md",
+    "projects/paper2-slot-prototype/.agents/results/COLLECT-DEPLOY-FIX.json"
+  ],
+  "scope_violations": [],
+  "diff_lines": 127,
+  "budget_exceeded": false,
+  "checks": [],
+  "requires_codex_review": false,
+  "os_sandbox": false,
+  "tool_scope_enforced": true
+}

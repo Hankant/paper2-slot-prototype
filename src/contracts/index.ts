@@ -15,3 +15,5 @@ export * from './trial-types.js';
 export * from './persistence-types.js';
 export * from './interfaces.js';
 export * from './validators.js';
+export * from './chat-events.js';
+export * from './chat-service.js';

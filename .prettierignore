@@ -5,3 +5,6 @@ coverage/
 artifacts/
 sources/
 package-lock.json
+
+# User-supplied reference document; preserve its original formatting.
+codex_to_kimi_swarm_plan.md

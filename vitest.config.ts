@@ -4,6 +4,11 @@ import { defineConfig } from 'vitest/config';
 import { fileURLToPath, URL } from 'node:url';
 
 export default defineConfig({
+  // node:sqlite is a Node 24 builtin that Vite 5's builtin list predates;
+  // force SSR externalization so vitest passes the specifier through to Node.
+  ssr: {
+    external: ['node:sqlite'],
+  },
   resolve: {
     alias: [
       {
@@ -19,8 +24,13 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'jsdom',
+    server: {
+      deps: {
+        external: ['node:sqlite'],
+      },
+    },
     include: ['tests/**/*.test.ts', 'tests/**/*.spec.ts'],
-    exclude: ['tests/e2e/**', 'node_modules/**', 'dist/**'],
+    exclude: ['tests/e2e/**', 'tests/collection-e2e/**', 'node_modules/**', 'dist/**'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html'],

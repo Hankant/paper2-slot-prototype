@@ -1,0 +1,31 @@
+{
+  "task_id": "COLLECT-CLIENT",
+  "status": "candidate_success",
+  "progress": "Collection frontend implemented: remote HTTP adapter with bounded same-ID retry queue in sessionStorage, ImmersiveRun credential/restore/audit-flush hooks with receipt gating, entry-screen credential step + consent material injection (preview defaults unchanged), collect.html/entry-collection.ts/bootstrap-collection.ts wiring (no local-demo import, fixed trial id literal), mountImmersive options for remote save status/export/logout-new-run/completed render, unit tests for adapter retry/schema/queue and run restore/gating.",
+  "changed_files": [
+    "src/persistence/retry-queue.ts",
+    "src/adapters/http/remote-adapter.ts",
+    "src/experiment/immersive-run.ts",
+    "src/domain/collection-materials.ts",
+    "src/ui/atelier/entry-screen.ts",
+    "src/ui/preview-immersive.ts",
+    "src/bootstrap-collection.ts",
+    "src/ui/collect.html",
+    "src/ui/entry-collection.ts",
+    "tests/adapters/http-remote-adapter.spec.ts",
+    "tests/experiment/collection-restore.spec.ts"
+  ],
+  "validation_not_run": [
+    "node_modules/typescript/bin/tsc --noEmit -p tsconfig.json (no shell access in worker; controller runs verifier)",
+    "vitest run tests/adapters/http-remote-adapter.spec.ts tests/experiment/collection-restore.spec.ts"
+  ],
+  "assumptions": [
+    "Server implements the frozen /api interface from .agents/architecture.md; all responses are schema-validated client-side and failures never present as saved/complete.",
+    "Collect trial_id is the literal 'preview-trial-1' so no outcome-bearing demo module is bundled; scripted ChatService (local-chat, no winner data) is reused.",
+    "Preview defaults preserved: mountEntry/mountImmersive/ImmersiveRun signatures remain backward compatible (new options are optional)."
+  ],
+  "remaining": [
+    "Controller-owned steps: Vite entry/proxy wiring for collect.html, server implementation, running typecheck/vitest/playwright externally.",
+    "Chat re-presentation after reload is distinguished via chat_represented_after_reload audit note; audit records are re-adopted from /api/export when available."
+  ]
+}

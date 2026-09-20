@@ -1,0 +1,45 @@
+{
+  "scope": {
+    "forbidden_files": [
+      "src/**",
+      "package.json",
+      "package-lock.json"
+    ],
+    "allowed_files": [
+      "deploy/**",
+      "Dockerfile",
+      ".dockerignore",
+      "docs/COLLECTION_DEPLOYMENT.md",
+      ".agents/results/COLLECT-DEPLOY-FIX.json"
+    ]
+  },
+  "acceptance": [
+    "Persistent volume explicit",
+    "No cloud success claimed",
+    "Secrets excluded from build"
+  ],
+  "budget": {
+    "max_retries": 2,
+    "max_diff_lines": 850,
+    "max_minutes": 10,
+    "max_files_changed": 8
+  },
+  "goal": "Second attempt: fix reviewed deployment artifacts, do not expand scope. Read existing docs/config and write .agents/results/COLLECT-DEPLOY-FIX.json with candidate_success. (1) .dockerignore currently excludes tools and handoffs/docs, but typecheck includes tests importing tool/runtime files; keep all source/typecheck inputs needed by build (tools and tests remain available; prettier/eslint files are not required by build). (2) Local docker run must override NODE_ENV=development when SECURE_COOKIES=false. Do not weaken production requirement. (3) Compose prefixes named volumes and container names; backup commands must use docker compose exec -T collect and work regardless of project prefix. Prefer one online backup procedure using Node SQLite backup/VACUUM INTO unique file in /data, docker compose cp to host, no chmod777, no forced rm of previous backup, no wrong bare collect-data volume. Provide safe stop+restore description without executable destructive rm recipe. (4) CSV curl URL currently single-quoted https://$DOMAIN -> literal; fix double quotes. (5) Admin token is env checked, not necessarily hashed into DB; only session token is hashed. Fix claim. (6) No replica-enforcement claim beyond single-instance operational design. (7) Remove unsupported concrete VM sizing and unconditional safe claims. Keep concise Chinese runbook. Controller has added build:all, server build config, node24 typings and dist-server ignore outside worker; do not flag those as missing final implementation. No shell/network or package changes.",
+  "task_id": "COLLECT-DEPLOY-FIX",
+  "risk": "medium",
+  "context": {
+    "entry_files": [
+      ".agents/architecture.md",
+      "AGENTS.md",
+      "docs/CONTRACTS.md",
+      "src/contracts/interfaces.ts"
+    ],
+    "worker_worktree": "E:/Info_AI_workers/paper2-20260919-deploy-fix",
+    "base_worktree": "E:/Info_AI_workers/paper2-20260919-deploy"
+  },
+  "output": {
+    "result_json_required": true,
+    "commit_required": true
+  },
+  "verifier": []
+}

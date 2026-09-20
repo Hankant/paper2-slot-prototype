@@ -1,0 +1,31 @@
+{
+  "task_id": "COLLECT-CLIENT-RETRY",
+  "status": "candidate_success",
+  "progress": "Resumed and finished the collection frontend: remote HTTP adapter + bounded same-ID sessionStorage retry queue, ImmersiveRun hooks (credential, snapshot restore, audit flush, receipt gating), entry credential step with onsite/remote selector and separate device detection, server-storage consent injection without memory-only promises, collect.html/entry-collection.ts/bootstrap-collection.ts (no local-demo import; fixed trial id literal), mountImmersive options (footer/saveStatus/exportRemote/onRestart/completedFeedback), and unit tests for adapter retry/schema/queue plus run restore/receipt-gating.",
+  "changed_files": [
+    "src/persistence/retry-queue.ts",
+    "src/adapters/http/remote-adapter.ts",
+    "src/experiment/immersive-run.ts",
+    "src/domain/collection-materials.ts",
+    "src/ui/atelier/entry-screen.ts",
+    "src/ui/preview-immersive.ts",
+    "src/bootstrap-collection.ts",
+    "src/ui/collect.html",
+    "src/ui/entry-collection.ts",
+    "tests/adapters/http-remote-adapter.spec.ts",
+    "tests/experiment/collection-restore.spec.ts"
+  ],
+  "validation_not_run": [
+    "node_modules/typescript/bin/tsc --noEmit -p tsconfig.json (no shell access in worker; controller runs verifier)",
+    "vitest run tests/adapters/http-remote-adapter.spec.ts tests/experiment/collection-restore.spec.ts"
+  ],
+  "assumptions": [
+    "Server implements the frozen /api interface from .agents/architecture.md; adapter validates every response and maps {error:{code,message}} to ContractError (401 -> SESSION_EXPIRED).",
+    "Reload resume relies on the HttpOnly session cookie: GET /api/session returns the snapshot when present, POST /api/session resumes without clearing prior events.",
+    "Preview behavior unchanged: all new mountEntry/mountImmersive/ImmersiveRun options are optional with original defaults."
+  ],
+  "remaining": [
+    "Controller-owned: Vite entry/proxy for collect.html, server build, external typecheck/vitest/playwright runs.",
+    "If finish keeps failing after feedback_presented, the run stays in stage 'feedback' and retries completion safely on the next reload."
+  ]
+}

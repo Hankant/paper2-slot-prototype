@@ -1,0 +1,56 @@
+# Dependencies and build outputs (rebuilt inside the image)
+node_modules
+dist
+dist-server
+.vite
+coverage
+*.tsbuildinfo
+
+# VCS metadata
+.git
+.gitignore
+.gitattributes
+.editorconfig
+
+# Formatter/linter configs are NOT inputs of `build:all` (typecheck + vite +
+# server build); excluding them from the build context is safe.
+.prettierrc.json
+.prettierignore
+.eslintrc.cjs
+
+# Secrets and local env — must never enter the image
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+private
+config/*.private.*
+materials/private
+data/raw
+data/participants
+
+# Research artifacts, logs, databases
+artifacts
+*.log
+*.sqlite
+*.sqlite3
+*.db
+*.db-wal
+*.db-shm
+
+# Research / coordination material not needed for the build.
+# NOTE: src/, server/, tools/, tests/, config/ and the tsconfig/vite/vitest
+# configs must stay in the context: `npm run build:all` runs typecheck over
+# tests and tool/runtime sources, and the server entry lives under server/.
+.agents
+handoffs
+sources
+analysis
+docs
+test-results
+playwright-report
+playwright/.cache
+
+*.sqlite-wal
+*.sqlite-shm

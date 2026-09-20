@@ -1,0 +1,58 @@
+{
+  "scope": {
+    "forbidden_files": [
+      "package.json",
+      "package-lock.json",
+      "src/ui/**",
+      "src/contracts/**"
+    ],
+    "allowed_files": [
+      "server/**",
+      "tests/server/**",
+      "src/adapters/local-demo/one-trial-preview.ts",
+      ".agents/results/COLLECT-SERVER.json",
+      ".agents/results/COLLECT-SERVER-RETRY.json"
+    ]
+  },
+  "acceptance": [
+    "HTTP integration tests verify durable records and gate future outcomes",
+    "Existing local-demo behavior preserved",
+    "No secret or token in export"
+  ],
+  "budget": {
+    "max_retries": 2,
+    "max_diff_lines": 2000,
+    "max_minutes": 20,
+    "max_files_changed": 12
+  },
+  "goal": "Resume your existing saved session and current files. First attempt was interrupted after several minutes without visible output; existing partial files have been committed and preserved. Do not restart exploration; write incremental files promptly. Finish the previous task requirements. Focus on working implementation and one essential test, avoid long planning prose. Controller will run checks externally. New result path: .agents/results/COLLECT-SERVER-RETRY.json. Mark candidate_success only when implementation exists; otherwise accurately state remaining. Implement durable SQLite+HTTP collection backend exactly matching .agents/architecture.md. Use node:sqlite DatabaseSync and node:http, no new dependencies. Reuse seeded local-demo adapter replay to preserve event semantics; preserve advice/feedback release state across requests and restarts. Atomic persistence, identity and cookie auth, separate admin export, bounded JSON, exact retries/conflict, server-scored outcomes withheld before final; core receipt only after COMMIT. Include HTTP integration tests for full self/AI branches, cookie isolation, wrong code, repeated/conflicting event, restart persistence and premature result rejection. Export createCollectionServer signature in architecture. Do not change frontend or package/config. Write checkpoint and final result in .agents/results/COLLECT-SERVER.json. Controller builds via Vite and runs tests externally.",
+  "task_id": "COLLECT-SERVER-RETRY",
+  "risk": "critical",
+  "context": {
+    "entry_files": [
+      ".agents/architecture.md",
+      "AGENTS.md",
+      "docs/CONTRACTS.md",
+      "src/contracts/interfaces.ts"
+    ],
+    "worker_worktree": "E:/Info_AI_workers/paper2-20260919-server",
+    "base_worktree": "E:/Info_AI_workers/paper2-20260919-base"
+  },
+  "output": {
+    "result_json_required": true,
+    "commit_required": true
+  },
+  "verifier": [
+    {
+      "args": [
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "tests/server"
+      ],
+      "name": "server-tests"
+    }
+  ],
+  "resume": true,
+  "no_thinking": true,
+  "session_id": "5640d468-fbbd-42ca-a436-24907d529b21"
+}

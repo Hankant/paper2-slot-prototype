@@ -1,0 +1,21 @@
+{
+  "task_id": "COLLECT-SERVER",
+  "status": "candidate_success",
+  "note": "Superseded by retry session; final result recorded in COLLECT-SERVER-RETRY.json",
+  "changed_files": [
+    "server/app.ts",
+    "server/main.ts",
+    "server/node-sqlite.d.ts",
+    "src/adapters/local-demo/one-trial-preview.ts",
+    "tests/server/collection-server.spec.ts"
+  ],
+  "validation_not_run": true,
+  "assumptions": [
+    "Controller runs Node 24 for node:sqlite; server/node-sqlite.d.ts shim covers missing typings under @types/node ^20.",
+    "Architecture already documents the createCollectionServer(options) signature; server/app.ts implements it exactly."
+  ],
+  "remaining": [
+    "External verifier must run tests/server (vitest, node environment per-file).",
+    "See COLLECT-SERVER-RETRY.json for the full final report."
+  ]
+}

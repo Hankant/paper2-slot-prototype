@@ -2,6 +2,12 @@
 
 版本：**0.3.0，2026-09-18 工程基线**。本轮修复 0.2.0 的接口集成缺陷；正式研究方案仍 unreleased。精确类型以 src/contracts/index.ts 及 validators.ts 为准。
 
+## 2026-09-18 单题预览增量
+
+TrialFeedback 新增可选 advice_evaluation（evaluation_version 1.0.0），明确区分建议正确、独立/最终答案一致与转向建议。advice_actual_hit 现在是展示后建议目标与实际中奖机器的比较；未展示为 null。旧 advice_target_hit 语义未定义，标记废弃并保留 null，不得用于分析。评分版本为 0.3.1，形状兼容 0.3.0。
+
+完整计算规则、流式呈现与存储限制见 [实现说明](ATELIER_IMPLEMENTATION.md)。源选择保存并收到回执后才允许读取建议和请求聊天。完整标准回答呈现后记录 advice_revealed，最终预测仍需用户手动确认。presentation_audit 仅内存导出，尚不是 ResultStore 的持久聊天协议。
+
 ## 服务分工
 
 | 接口           | 方法                          | 约定                                                 |
@@ -23,25 +29,25 @@
 
 EventEnvelope 是按 event_type 区分的 TypeScript 联合类型；来自网络/缓存的 unknown 先用 parseEventEnvelope 校验。运行时保留已验证的 payload；不能将其丢弃后称为已保存。
 
-| 事件                         | payload                                            | trial_id                          |
-| ---------------------------- | -------------------------------------------------- | --------------------------------- |
-| consent_recorded             | version                                            | 禁止；具体同意/退出流程待正式实现 |
-| profile_submitted            | fields                                             | 禁止；真实字段仍待研究确定        |
-| comprehension_answered       | question_id, answer, correct                       | 可选，说明页不伪造试次            |
-| prediction_submitted         | machine_id, display_position                       | 必需；独立预测                    |
-| confidence_submitted         | confidence_percent                                 | 必需；0—100                       |
-| source_selected              | source                                             | 必需；不要求此时已有最终答案      |
-| advice_revealed              | advice_id, revealed_at_phase                       | 必需；建议已可见后记录            |
-| final_prediction_submitted   | machine_id, display_position, changed_after_advice | 必需；与独立预测分开              |
-| feedback_presented           | presented_at_ms                                    | 必需；先获取/展示反馈，再记录     |
-| visibility_changed           | element_id, visible                                | 可选，会话级页面可不属于试次      |
-| session_completion_requested | ack_required_event_count                           | 禁止                              |
+| 事件                         | payload                                            | trial_id                                 |
+| ---------------------------- | -------------------------------------------------- | ---------------------------------------- |
+| consent_recorded             | version                                            | 禁止；新版演示入口已接入，正式文本待确认 |
+| profile_submitted            | fields                                             | 禁止；真实字段仍待研究确定               |
+| comprehension_answered       | question_id, answer, correct                       | 可选，说明页不伪造试次                   |
+| prediction_submitted         | machine_id, display_position                       | 必需；独立预测                           |
+| confidence_submitted         | confidence_percent                                 | 必需；0—100                              |
+| source_selected              | source                                             | 必需；不要求此时已有最终答案             |
+| advice_revealed              | advice_id, revealed_at_phase                       | 必需；建议已可见后记录                   |
+| final_prediction_submitted   | machine_id, display_position, changed_after_advice | 必需；与独立预测分开                     |
+| feedback_presented           | presented_at_ms                                    | 必需；先获取/展示反馈，再记录            |
+| visibility_changed           | element_id, visible                                | 可选，会话级页面可不属于试次             |
+| session_completion_requested | ack_required_event_count                           | 禁止                                     |
 
 source 的 human/ai/mixed/no_advice_shown 是接口保留值，不代表正式实验条件已确认。当前单题预览仅用 human（明确表示自己）和 ai（模拟建议），不实施 mixed 条件。没有建议的正式阶段应另明确完成规则，不伪造 source_selected。
 
 ## 本轮可运行的单题顺序
 
-单题预览跳过知情同意与资料页，不收集个人资料；从 main 开始。演示固定为：
+旧 preview.html 跳过知情同意与资料页，从 main 开始。新版 preview-immersive.html 必须先完成演示同意与说明；开始按钮点击后建立会话，以 consent 阶段保存 consent_recorded（payload.version），无 trial_id，再进入 main。可选 requireConsentVersion 会校验同意版本并阻止未同意时加载试次；默认关闭以兼容旧入口。两页均不收集个人资料。演示固定为：
 
 ```text
 独立预测保存 → 信心保存 → 来源选择保存 → 读取并展示建议
@@ -77,3 +83,11 @@ one-trial-preview 仅在内存保留事件；已验证内存幂等，不支持�
 当前 contract/schema/client 为 0.3.0，演示材料为 0.3.0，demo 配置为 demo-0.3.0；正式 protocol=unreleased。已有实验会话不得中途换版。本次没有真实样本需要迁移。
 
 A 唯一维护共享接口、依赖、bootstrap 和版本。B/C/D 按职责表实施；修改字段先交 A 协调。推荐公共 import '@contracts'，裸别名与子路径在 TS/Vite/Vitest 三处均配置，并经过真实消费者验证。
+
+## 沉浸式 UI 增量（U0 候选接口，不入 0.3.0 兼容保证）
+
+- `ChatStreamEvent`（`src/contracts/chat-events.ts`）：5-variant 联合 `started` / `text_delta` / `completed` / `cancelled` / `failed`；不兼容 0.3.0 公共接口签名（新增类型不影响其它接口）。
+- `ChatService.streamReply(request, signal): AsyncIterable<ChatStreamEvent>`（`src/contracts/chat-service.ts`）：`ChatRequest.source_choice` 仅允许 `ai` / `mixed`；`ChatRequest.user_text_chars` 必须等于 `user_text.length`；`ChatStreamEvent.completed.content_hash` 必须为 64 字符 sha256-hex；`ChatStreamEvent.started` 必须在任何 `text_delta` 之前；`text_delta.sequence` 严格单调递增（≥ 0），其它变种固定 `sequence = -1`。
+- 状态机镜像：`docs/CHAT_STATE_TABLE.md`；与 `IMMERSIVE_UI_PLAN.md §4.2 §4.3` 对齐。
+- 错误码：`CHAT_TIMEOUT` / `CHAT_RATE_LIMITED` / `CHAT_PROVIDER_DOWN` / `CHAT_OUTPUT_BLOCKED` / `CHAT_INVALID_INPUT` / `CHAT_UNKNOWN`；`retryable` 默认 `true` 除非显式 `CHAT_OUTPUT_BLOCKED`/`CHAT_INVALID_INPUT`。
+- 计划冻结于 `0.4.0-rc`，等 B 视觉稿、C `LocalChatAdapter`、Q Playwright 三条全部合入。

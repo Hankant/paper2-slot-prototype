@@ -1,0 +1,63 @@
+{
+  "scope": {
+    "forbidden_files": [
+      "package.json",
+      "package-lock.json",
+      "server/**",
+      "src/contracts/**"
+    ],
+    "allowed_files": [
+      "src/adapters/http/**",
+      "src/persistence/**",
+      "src/bootstrap-collection.ts",
+      "src/ui/collect.html",
+      "src/ui/entry-collection.ts",
+      "src/ui/atelier/entry-screen.ts",
+      "src/ui/preview-immersive.ts",
+      "src/experiment/immersive-run.ts",
+      "src/domain/collection-materials.ts",
+      "tests/adapters/**",
+      "tests/experiment/collection-restore.spec.ts",
+      ".agents/results/COLLECT-CLIENT.json"
+    ]
+  },
+  "acceptance": [
+    "No regressions in preview",
+    "Durable receipt precedes completion",
+    "Reload resumes locked choices"
+  ],
+  "budget": {
+    "max_retries": 2,
+    "max_diff_lines": 2400,
+    "max_minutes": 25,
+    "max_files_changed": 15
+  },
+  "goal": "Implement collection frontend using .agents/architecture.md API: new collect.html+entry-collection.ts+bootstrap-collection.ts, remote HTTP adapter and bounded same-ID retry queue in sessionStorage. Preserve original preview defaults. Extend ImmersiveRun with optional credential/restore/audit flush hooks and receipt gating (no completion UI after failed finish); restore server-confirmed predictions and existing session on reload, including interrupted stages. Give user entry-code plus onsite/remote selector, detect device separately. Inject server-storage consent material into mountEntry; no false memory-only promises in collect mode. Existing machine/chat UI optional settings handle remote save status/export/logout new run, resumed phases and completed render. No future winner or local-demo import in collect bundle. Add meaningful unit tests for adapter retry/schema/restore. All code TypeScript; no new deps/config edits. Write progress and final result to .agents/results/COLLECT-CLIENT.json. Controller owns bundling/Vite entry/proxy.",
+  "task_id": "COLLECT-CLIENT",
+  "risk": "high",
+  "context": {
+    "entry_files": [
+      ".agents/architecture.md",
+      "AGENTS.md",
+      "docs/CONTRACTS.md",
+      "src/contracts/interfaces.ts"
+    ],
+    "worker_worktree": "E:/Info_AI_workers/paper2-20260919-client",
+    "base_worktree": "E:/Info_AI_workers/paper2-20260919-base"
+  },
+  "output": {
+    "result_json_required": true,
+    "commit_required": true
+  },
+  "verifier": [
+    {
+      "args": [
+        "node_modules/typescript/bin/tsc",
+        "--noEmit",
+        "-p",
+        "tsconfig.json"
+      ],
+      "name": "typecheck"
+    }
+  ]
+}

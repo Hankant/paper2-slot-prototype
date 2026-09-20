@@ -1,0 +1,518 @@
+.entry-badge {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  padding: 7px 13px;
+  border-radius: 30px;
+}
+.entry-main {
+  padding: 30px 0 8px;
+}
+.entry-progress {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  color: #81877e;
+  font-size: 12px;
+  margin-bottom: 38px;
+}
+.entry-progress span {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  white-space: nowrap;
+}
+.entry-progress b {
+  display: grid;
+  place-items: center;
+  width: 25px;
+  height: 25px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  font-size: 10px;
+  font-weight: 500;
+}
+.entry-progress [aria-current] {
+  color: var(--green);
+  font-weight: 600;
+}
+.entry-progress [aria-current] b {
+  color: white;
+  background: var(--green);
+  border-color: var(--green);
+}
+.entry-progress i {
+  height: 1px;
+  width: 44px;
+  background: var(--line);
+}
+.entry-layout {
+  display: grid;
+  grid-template-columns: 0.85fr 1.45fr;
+  gap: 64px;
+  align-items: start;
+}
+.entry-overview {
+  position: sticky;
+  top: 30px;
+  padding: 12px 0 24px;
+}
+.entry-main h1 {
+  font-size: clamp(32px, 3.9vw, 50px);
+  line-height: 1.3;
+  letter-spacing: -1.8px;
+  font-weight: 600;
+  margin: 20px 0;
+  outline: none;
+}
+.entry-lead {
+  color: #637066;
+  font-size: 15px;
+  line-height: 1.9;
+}
+.entry-illustration {
+  margin: 32px 0 24px;
+  max-width: 325px;
+  background: linear-gradient(135deg, #31483b, #20382f);
+  border: 1px solid #9a865b;
+  border-radius: 22px;
+  box-shadow: inset 0 0 0 4px #31473a;
+  padding: 25px 22px 20px;
+  text-align: center;
+}
+.entry-illustration > span {
+  color: #c8b681;
+  font-size: 8px;
+  letter-spacing: 3px;
+}
+.entry-illustration > div {
+  display: flex;
+  margin: 18px 0;
+  border: 5px solid #b39d6b;
+  border-radius: 9px;
+  overflow: hidden;
+  background: #f3ecd8;
+}
+.entry-illustration i {
+  display: grid;
+  place-items: center;
+  padding: 10px 4px;
+  flex: 1;
+  min-width: 0;
+  box-shadow:
+    inset 0 8px 14px #3e341624,
+    inset 0 -8px 14px #3e341624;
+  border-right: 1px solid #beb59c;
+}
+.entry-illustration svg {
+  width: 100%;
+  height: 58px;
+}
+.entry-illustration b {
+  color: #d8ccb0;
+  font-size: 10px;
+  letter-spacing: 5px;
+  font-weight: 400;
+}
+.entry-facts {
+  margin: 0;
+  max-width: 325px;
+  font-size: 12px;
+}
+.entry-facts div {
+  display: flex;
+  justify-content: space-between;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+  gap: 12px;
+}
+.entry-facts dt {
+  color: var(--muted);
+}
+.entry-facts dd {
+  margin: 0;
+}
+.entry-side-note {
+  max-width: 325px;
+  font-size: 12px;
+  line-height: 1.9;
+  color: var(--muted);
+  margin-top: 20px;
+}
+.consent-card {
+  background: #fffefa;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 32px 36px 20px;
+}
+.entry-card-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.draft-pill {
+  font-size: 10px;
+  color: #79663e;
+  padding: 5px 9px;
+  border-radius: 5px;
+  background: #f2ead7;
+  white-space: nowrap;
+}
+.consent-card > h2 {
+  font-size: 23px;
+  font-weight: 600;
+  letter-spacing: -0.5px;
+  margin: 16px 0 24px;
+}
+.consent-sections {
+  display: grid;
+  gap: 18px;
+}
+.consent-sections h3 {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0 0 6px;
+}
+.consent-sections h3 span {
+  color: #9b947b;
+  font:
+    11px Georgia,
+    serif;
+  margin-right: 10px;
+}
+.consent-sections p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.9;
+  color: #58645c;
+}
+.entry-pending {
+  border-top: 1px solid var(--line);
+  margin: 22px 0;
+  padding-top: 15px;
+  font-size: 12px;
+  color: #706950;
+  line-height: 1.9;
+}
+.entry-pending summary {
+  cursor: pointer;
+  min-height: 28px;
+}
+.entry-pending p {
+  margin-bottom: 0;
+}
+.consent-checks {
+  padding: 0;
+  border: 0;
+  margin: 22px 0;
+}
+.consent-checks legend {
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+.consent-checks label {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 9px 0;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1.7;
+}
+.consent-checks input {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  margin: 2px 0 0;
+  accent-color: var(--green);
+}
+.entry-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 15px;
+}
+.entry-actions .primary {
+  min-height: 48px;
+  font-size: 13px;
+  padding: 12px 20px;
+}
+.entry-secondary {
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: #626d63;
+  padding: 12px 16px;
+  min-height: 46px;
+  font-size: 12px;
+}
+.entry-secondary:hover {
+  background: #efefe8;
+}
+.entry-fine-print {
+  font-size: 11px;
+  color: var(--muted);
+  text-align: right;
+  margin: 12px 0 0;
+}
+.instructions-heading {
+  max-width: 730px;
+  margin: 48px 0 34px;
+}
+.instruction-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+.instruction-cards > section {
+  border: 1px solid var(--line);
+  background: #fffefa;
+  border-radius: 14px;
+  padding: 26px;
+  display: flex;
+  flex-direction: column;
+}
+.instruction-number {
+  font:
+    italic 36px Georgia,
+    serif;
+  color: #a6976e;
+}
+.instruction-cards h2 {
+  font-size: 20px;
+  font-weight: 500;
+  margin: 22px 0 12px;
+}
+.instruction-cards p {
+  font-size: 14px;
+  line-height: 1.9;
+  color: #637066;
+  margin: 0 0 26px;
+}
+.instruction-caption {
+  border-top: 1px solid var(--line);
+  padding-top: 17px;
+  margin-top: auto;
+  font-size: 11px;
+  color: #7c806f;
+}
+.instruction-notes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 30px;
+  margin: 28px 0;
+}
+.instruction-notes section {
+  display: flex;
+  gap: 16px;
+  padding: 20px 0;
+}
+.note-mark {
+  display: grid;
+  place-items: center;
+  border: 1px solid #c5cebc;
+  color: var(--green);
+  height: 30px;
+  width: 30px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.instruction-notes h2 {
+  font-size: 14px;
+  margin: 0 0 8px;
+  font-weight: 600;
+}
+.instruction-notes p {
+  font-size: 13px;
+  line-height: 1.9;
+  color: #637066;
+  margin: 0;
+}
+.entry-start-bar {
+  padding: 22px 0;
+  border-top: 1px solid var(--line);
+  display: flex;
+  gap: 25px;
+  align-items: center;
+  justify-content: space-between;
+}
+.entry-start-bar > div:first-child {
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--muted);
+}
+.entry-ready-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #70947f;
+}
+.entry-error {
+  color: #9f4733;
+  font-size: 13px;
+}
+.entry-exit {
+  max-width: 550px;
+  text-align: center;
+  padding: 65px 0 100px;
+  margin: auto;
+}
+.exit-symbol {
+  display: inline-grid;
+  place-items: center;
+  width: 70px;
+  height: 70px;
+  font-size: 32px;
+  border-radius: 50%;
+  background: #e7ece1;
+  margin-bottom: 24px;
+}
+.entry-exit p:not(.eyebrow) {
+  font-size: 14px;
+  color: var(--muted);
+  line-height: 2;
+  margin-bottom: 28px;
+}
+@media (max-width: 900px) {
+  .entry-layout {
+    gap: 30px;
+    grid-template-columns: 0.8fr 1.4fr;
+  }
+  .consent-card {
+    padding: 25px;
+  }
+  .entry-actions {
+    flex-wrap: wrap;
+  }
+  .entry-actions .primary {
+    flex: 1;
+  }
+  .instruction-cards {
+    gap: 12px;
+  }
+  .instruction-cards > section {
+    padding: 20px;
+  }
+}
+@media (max-width: 650px) {
+  .entry-main {
+    padding-top: 22px;
+  }
+  .entry-progress {
+    gap: 8px;
+    font-size: 10px;
+    margin-bottom: 22px;
+    justify-content: space-between;
+  }
+  .entry-progress span {
+    gap: 5px;
+  }
+  .entry-progress i {
+    width: 18px;
+  }
+  .entry-layout {
+    display: block;
+  }
+  .entry-overview {
+    position: static;
+    padding: 0 0 18px;
+  }
+  .entry-main h1 {
+    font-size: 32px;
+    margin: 16px 0;
+    letter-spacing: -1px;
+  }
+  .entry-overview h1 br {
+    display: none;
+  }
+  .entry-lead {
+    font-size: 13px;
+  }
+  .entry-illustration {
+    display: none;
+  }
+  .entry-facts {
+    max-width: none;
+    display: flex;
+    flex-wrap: wrap;
+    column-gap: 20px;
+    margin: 16px 0 0;
+  }
+  .entry-facts div {
+    display: block;
+    border: none;
+    padding: 0;
+    font-size: 11px;
+  }
+  .entry-facts dd {
+    margin-top: 5px;
+  }
+  .entry-side-note {
+    display: none;
+  }
+  .consent-card {
+    padding: 22px 19px 18px;
+    border-radius: 12px;
+  }
+  .consent-card > h2 {
+    font-size: 20px;
+  }
+  .entry-card-heading .eyebrow {
+    font-size: 8px;
+    letter-spacing: 0.8px;
+  }
+  .consent-sections {
+    gap: 17px;
+  }
+  .entry-actions {
+    flex-direction: column-reverse;
+    gap: 9px;
+    align-items: stretch;
+  }
+  .entry-actions button {
+    width: 100%;
+  }
+  .entry-fine-print {
+    text-align: center;
+    font-size: 10px;
+  }
+  .instructions-heading {
+    margin: 32px 0 24px;
+  }
+  .instruction-cards {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+  .instruction-cards > section {
+    padding: 22px;
+  }
+  .instruction-number {
+    font-size: 29px;
+  }
+  .instruction-cards h2 {
+    margin-top: 12px;
+  }
+  .instruction-cards p {
+    font-size: 13px;
+    margin-bottom: 18px;
+  }
+  .instruction-notes {
+    grid-template-columns: 1fr;
+    gap: 0;
+    margin: 12px 0;
+  }
+  .entry-start-bar {
+    display: block;
+  }
+  .entry-start-bar .entry-actions {
+    margin-top: 20px;
+  }
+  .entry-exit {
+    padding-top: 38px;
+  }
+}

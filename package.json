@@ -15,7 +15,16 @@
     "format:check": "prettier --check \"src/**/*.{ts,css,html,json}\" \"tests/**/*.ts\" \"config/**/*.{ts,json}\" \"docs/**/*.md\" \"handoffs/**/*.md\" \"*.{ts,cjs,mjs,json,md}\"",
     "test": "vitest",
     "test:run": "vitest run",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "build:server": "vite build --config vite.server.config.ts",
+    "build:all": "npm run build && npm run build:server",
+    "start:server": "node dist-server/main.js",
+    "test:server": "vitest run tests/server",
+    "swarm": "node tools/swarmctl.ts",
+    "test:collection": "playwright test --config playwright.collection.config.ts",
+    "collect:local": "node tools/collection-local.ts start",
+    "collect:export": "node tools/collection-local.ts export",
+    "collect:backup": "node tools/collection-local.ts backup"
   },
   "dependencies": {
     "jspsych": "^7.3.4",
@@ -24,7 +33,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.45.0",
-    "@types/node": "^20.14.0",
+    "@types/node": "^24.13.6",
     "@types/uuid": "^9.0.8",
     "@typescript-eslint/eslint-plugin": "^7.13.0",
     "@typescript-eslint/parser": "^7.13.0",
@@ -37,7 +46,7 @@
     "vitest": "^1.6.0"
   },
   "engines": {
-    "node": ">=20.0.0",
+    "node": ">=24.0.0",
     "npm": ">=10.0.0"
   }
 }

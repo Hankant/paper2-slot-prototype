@@ -1,0 +1,23 @@
+{
+  "task_id": "COLLECT-SERVER",
+  "status": "needs_review",
+  "exit_code": 1,
+  "timed_out": false,
+  "duration_seconds": 532,
+  "kimi_tokens": null,
+  "cost": null,
+  "tool_calls": null,
+  "base_commit": "e2640a20aacd54c6b32524dee855a2e3d5dcec76",
+  "commit": "90d90f24a9f0ee1f5ded4d1b4372b737116179e5",
+  "changed_files": [
+    "projects/paper2-slot-prototype/src/adapters/local-demo/one-trial-preview.ts",
+    "projects/paper2-slot-prototype/.agents/results/COLLECT-SERVER.json"
+  ],
+  "scope_violations": [],
+  "diff_lines": 26,
+  "budget_exceeded": false,
+  "checks": [],
+  "requires_codex_review": true,
+  "os_sandbox": false,
+  "tool_scope_enforced": true
+}

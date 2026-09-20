@@ -1,0 +1,41 @@
+{
+  "task_id": "COLLECT-DEPLOY-FIX",
+  "status": "candidate_success",
+  "changed_files": [
+    ".dockerignore",
+    "Dockerfile",
+    "deploy/docker-compose.yml",
+    "docs/COLLECTION_DEPLOYMENT.md",
+    ".agents/results/COLLECT-DEPLOY-FIX.json"
+  ],
+  "validation_not_run": [
+    "docker build / docker compose config (worker has no shell or network)",
+    "npm run build:all (controller owns the script and server build config; added outside worker, not flagged as missing)",
+    "all runtime tests and cloud verification (no cloud account, by design)"
+  ],
+  "assumptions": [
+    "`npm run build:all` runs typecheck over src/, tests/, and tool/runtime sources (tools/), and the server entry lives under server/; therefore .dockerignore keeps src/, server/, tools/, tests/, config/, and all tsconfig/vite/vitest configs, and only excludes files not required by the build (prettier/eslint configs remain excluded).",
+    "Server enforces secure cookies under NODE_ENV=production (per .agents/architecture.md), so the local docker run must override NODE_ENV=development when SECURE_COOKIES=false; production default in the image is unchanged.",
+    "docker compose prefixes container and volume names with the project name, so backup/restore commands use `docker compose exec -T collect` and `docker compose cp` only; no bare `collect` container name or bare `collect-data` volume name is used.",
+    "ADMIN_TOKEN is validated against the env var and is not stored in the database; only session tokens are hashed in the DB (per frozen interface), so the runbook claim was corrected."
+  ],
+  "acceptance_mapping": {
+    "persistent_volume_explicit": "Dockerfile VOLUME /data + ENV DATA_PATH=/data/collection.db; compose named volume collect-data:/data; runbook warns against copying live WAL files and against scaling",
+    "no_cloud_success_claimed": "Runbook states user has no cloud account, nothing deployed or verified; no prices, pricing deferred to vendor sites",
+    "secrets_excluded_from_build": ".dockerignore excludes .env/.env.*/*.pem/*.key/private/materials/private/data participants/artifacts/logs/db; compose fails fast on missing ENTRY_CODE/ADMIN_TOKEN; admin export curl reads token from env and never from committed files"
+  },
+  "review_fixes": [
+    ".dockerignore: documented keep-list for build/typecheck inputs (src, server, tools, tests, config, tsconfig/vite configs); prettier/eslint/editorconfig remain excluded as non-build inputs.",
+    "Runbook §3: local docker run now passes -e NODE_ENV=development alongside SECURE_COOKIES=false; production requirement kept (image default and compose unchanged).",
+    "Runbook §6: single online backup via VACUUM INTO into a timestamped unique file in /data, retrieved with `docker compose cp`; prefix-agnostic via compose commands; no chmod 777, no forced rm of previous backups, no bare collect/collect-data names; stop+restore rewritten as descriptive non-destructive steps.",
+    "Runbook §7: CSV curl URL now double-quoted so $DOMAIN expands.",
+    "Runbook §7: admin token claim corrected (env-var comparison, not hashed into DB; session token is the hashed one).",
+    "compose: removed deploy.replicas: 1; single-instance stated as operational design constraint, not compose-enforced.",
+    "Runbook §5/§4: removed concrete VM sizing (1-2 vCPU / 1-2 GB) and unconditional 'safe/enough' claims; HOST=0.0.0.0 wording now conditional on not publishing port 5200."
+  ],
+  "remaining": [
+    "Controller to run docker build / docker compose config and repo tests (build:all, server build config, node24 typings, dist-server ignore are controller-owned and intentionally not flagged as missing).",
+    "User must obtain domain and (if desired) cloud account before any real deployment; ethics/protocol must be finalized before any real participant recruitment."
+  ],
+  "notes": "Commit must be created by the controller (worker has no git tool). No source or package changes; diff kept well under budget."
+}

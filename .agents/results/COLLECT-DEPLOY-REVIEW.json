@@ -1,0 +1,22 @@
+{
+  "task_id": "COLLECT-DEPLOY-REVIEW",
+  "status": "candidate_success",
+  "exit_code": 0,
+  "timed_out": false,
+  "duration_seconds": 110,
+  "kimi_tokens": null,
+  "cost": null,
+  "tool_calls": null,
+  "base_commit": "03d4fb083b948cf8bfa0db46d6f3e53bdc1d5cff",
+  "commit": "5bff299c61a0139e1f55f782699372fc0230ae10",
+  "changed_files": [
+    "projects/paper2-slot-prototype/.agents/results/COLLECT-DEPLOY-REVIEW.json"
+  ],
+  "scope_violations": [],
+  "diff_lines": 63,
+  "budget_exceeded": false,
+  "checks": [],
+  "requires_codex_review": false,
+  "os_sandbox": false,
+  "tool_scope_enforced": true
+}

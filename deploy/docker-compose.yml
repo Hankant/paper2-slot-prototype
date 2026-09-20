@@ -1,0 +1,67 @@
+# Compose example: collection server + Caddy HTTPS reverse proxy.
+#
+# Required environment variables (set in deploy/.env or your shell — NEVER commit):
+#   DOMAIN       e.g. collect.example.org (must already resolve to this host)
+#   ENTRY_CODE   participant entry code checked by the server
+#   ADMIN_TOKEN  admin bearer token for GET /api/admin/export
+#
+# Single replica only: the app keeps SQLite state on one volume and cannot be
+# scaled horizontally. Do NOT use `docker compose up --scale collect=N`.
+services:
+  collect:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: paper2-collection:local
+    restart: unless-stopped
+    # No published host port: the app is only reachable through Caddy on the
+    # internal compose network. (HOST=0.0.0.0 is safe inside the container
+    # network; do not publish 5200 to the host.)
+    expose:
+      - "5200"
+    environment:
+      HOST: 0.0.0.0
+      PORT: "5200"
+      DATA_PATH: /data/collection.db
+      STATIC_DIR: /app/dist
+      SECURE_COOKIES: "true"
+      # Fail fast if secrets are missing instead of starting with defaults.
+      ENTRY_CODE: ${ENTRY_CODE:?set ENTRY_CODE in deploy/.env}
+      ADMIN_TOKEN: ${ADMIN_TOKEN:?set ADMIN_TOKEN in deploy/.env}
+    volumes:
+      # Explicit persistent volume for SQLite. Back this up per the runbook;
+      # do not copy the live files while the server is running.
+      - collect-data:/data
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:5200/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    # Single-writer SQLite design: run exactly one instance (see runbook §4).
+    # Do not scale this service or attach its volume to another app instance.
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN in deploy/.env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data # TLS certificates (persist to avoid re-issuing)
+      - caddy-config:/config
+    depends_on:
+      collect:
+        condition: service_healthy
+
+volumes:
+  collect-data:
+  caddy-data:
+  caddy-config:

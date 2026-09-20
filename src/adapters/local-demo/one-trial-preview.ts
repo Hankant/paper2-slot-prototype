@@ -14,6 +14,7 @@ import {
   type Session,
   type TrialFeedback,
 } from '@contracts';
+import { evaluateAdvice } from '../../domain/advice-evaluation.js';
 
 export const PREVIEW_TRIAL_ID = 'preview-trial-1';
 const machines = [
@@ -57,8 +58,17 @@ function canonical(value: unknown): string {
   return JSON.stringify(value) ?? 'null';
 }
 
-export function createOneTrialPreview(): ExperimentAdapter & { exportEvents(): EventEnvelope[] } {
-  const session: Session = {
+export function createOneTrialPreview(
+  options: {
+    adviceForSelf?: boolean;
+    requireConsentVersion?: string;
+    /** Server-only: pin identity/metadata so a durable backend can replay
+     *  the exact session after a restart. Omit for the browser preview. */
+    seedSession?: Partial<Session>;
+  } = {},
+): ExperimentAdapter & { exportEvents(): EventEnvelope[] } {
+  const seed = options.seedSession ?? {};
+  const defaults: Session = {
     session_id: crypto.randomUUID(),
     participant_id: 'virtual-preview',
     recruitment_batch: 'preview',
@@ -77,8 +87,16 @@ export function createOneTrialPreview(): ExperimentAdapter & { exportEvents(): E
       provider: 'memory-preview',
     },
   };
+  const session: Session = {
+    ...defaults,
+    ...seed,
+    metadata: { ...defaults.metadata, ...(seed.metadata ?? {}) },
+  };
   const events: EventEnvelope[] = [];
   const byId = new Map<string, EventEnvelope>();
+  const entryRequired: ExperimentEventType[] = options.requireConsentVersion
+    ? ['consent_recorded']
+    : [];
   let opened = false;
   let completed = false;
   let adviceLoaded = false;
@@ -96,10 +114,17 @@ export function createOneTrialPreview(): ExperimentAdapter & { exportEvents(): E
   }
   function checkTrial(input: Session, trialId: string): void {
     checkSession(input);
+    if (options.requireConsentVersion && !has('consent_recorded')) fail('请先确认参与说明');
     if (trialId !== PREVIEW_TRIAL_ID) fail('未知试次', 'INVALID_EVENT');
   }
   function has(type: ExperimentEventType): boolean {
     return events.some((e) => e.event_type === type);
+  }
+  function selfWithoutAdvice(): boolean {
+    return (
+      options.adviceForSelf === false &&
+      events.some((e) => e.event_type === 'source_selected' && e.payload.source === 'human')
+    );
   }
   function receipt(ids: string[] = []): SaveReceipt {
     return {
@@ -110,18 +135,30 @@ export function createOneTrialPreview(): ExperimentAdapter & { exportEvents(): E
       session_status: completed ? 'completed' : 'in_progress',
       persisted_at: null,
       receipt_id: null,
-      current_phase: completed ? 'completed' : 'main',
+      current_phase: completed
+        ? 'completed'
+        : options.requireConsentVersion && !has('consent_recorded')
+          ? 'consent'
+          : 'main',
     };
   }
   function checkEvent(event: EventEnvelope): void {
     if (
       completed ||
-      order[events.length] !== event.event_type ||
+      [...entryRequired, ...order].filter(
+        (type) => !(selfWithoutAdvice() && type === 'advice_revealed'),
+      )[events.length] !== event.event_type ||
       event.sequence_no !== events.length
     ) {
       fail('事件顺序或序号错误');
     }
-    if (event.phase !== 'main') fail('预览只接受 main 阶段事件', 'INVALID_EVENT');
+    const expectedPhase = event.event_type === 'consent_recorded' ? 'consent' : 'main';
+    if (event.phase !== expectedPhase) fail('事件阶段不匹配', 'INVALID_EVENT');
+    if (
+      event.event_type === 'consent_recorded' &&
+      event.payload.version !== options.requireConsentVersion
+    )
+      fail('参与说明版本不匹配', 'INVALID_EVENT');
     if (event.trial_id !== undefined && event.trial_id !== PREVIEW_TRIAL_ID)
       fail('试次不匹配', 'INVALID_EVENT');
     if (
@@ -195,7 +232,7 @@ export function createOneTrialPreview(): ExperimentAdapter & { exportEvents(): E
         checkSession(input);
         return {
           session_id: session.session_id,
-          phase: completed ? 'completed' : 'main',
+          phase: receipt().current_phase,
           trial_index: 0,
           last_confirmed_event_id: events.at(-1)?.event_id ?? null,
           last_confirmed_sequence_no: events.at(-1)?.sequence_no ?? 0,
@@ -247,6 +284,7 @@ export function createOneTrialPreview(): ExperimentAdapter & { exportEvents(): E
       async loadAdvice(input, trialId) {
         checkTrial(input, trialId);
         if (!has('source_selected')) fail('先保存独立预测、信心及来源选择');
+        if (selfWithoutAdvice()) fail('自己来源不开放 AI 建议');
         adviceLoaded = true;
         return { ...advice };
       },
@@ -256,17 +294,27 @@ export function createOneTrialPreview(): ExperimentAdapter & { exportEvents(): E
         const final = events.find((e) => e.event_type === 'final_prediction_submitted');
         if (!independent || !final) fail('先保存最终预测');
         const winner = 'C'; // Fixed demo outcome: A's higher history rate does not make it correct.
+        const evaluation = evaluateAdvice({
+          exposed: has('advice_revealed'),
+          target: advice.advice_target_machine_id,
+          winner,
+          independent: independent.payload.machine_id,
+          final: final.payload.machine_id,
+        });
         feedback ??= {
           trial_id: PREVIEW_TRIAL_ID,
           actual_winner_machine_id: winner,
           independent_correct: independent.payload.machine_id === winner,
           final_correct: final.payload.machine_id === winner,
           participant_predicted_winner: final.payload.machine_id === winner,
-          advice_target_hit: null,
-          advice_actual_hit: false,
+          advice_target_hit: null, // Deprecated; explicit reason is recorded in advice_evaluation.
+          advice_actual_hit: evaluation.advice_correct,
+          advice_evaluation: evaluation,
           points_awarded: final.payload.machine_id === winner ? 10 : 0,
-          scoring_version: '0.3.0',
-          required_event_types: required,
+          scoring_version: '0.3.1',
+          required_event_types: [...entryRequired, ...required].filter(
+            (type) => !(selfWithoutAdvice() && type === 'advice_revealed'),
+          ),
         };
         feedbackLoaded = true;
         return structuredClone(feedback);
@@ -317,6 +365,7 @@ export function createOneTrialPreview(): ExperimentAdapter & { exportEvents(): E
         }
         return {
           ...result,
+          current_phase: receipt().current_phase,
           acknowledged_event_ids: acknowledged.filter(
             (id) => !rejected.some((r) => r.event_id === id),
           ),

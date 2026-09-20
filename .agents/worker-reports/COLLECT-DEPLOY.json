@@ -1,0 +1,33 @@
+{
+  "task_id": "COLLECT-DEPLOY",
+  "status": "candidate_success",
+  "changed_files": [
+    "Dockerfile",
+    ".dockerignore",
+    "deploy/docker-compose.yml",
+    "deploy/Caddyfile",
+    "docs/COLLECTION_DEPLOYMENT.md",
+    ".agents/results/COLLECT-DEPLOY.json"
+  ],
+  "validation_not_run": [
+    "docker build / docker compose config (worker has no shell or network)",
+    "npm run build:all (script not yet present in package.json; owned by server implementation task)",
+    "all runtime tests and cloud verification (no cloud account, by design)"
+  ],
+  "assumptions": [
+    "Server task delivers `npm run build:all` producing dist/ and dist-server/main.js per .agents/architecture.md; package.json is forbidden to this task so the script is referenced but not added.",
+    "Dockerfile HEALTHCHECK and compose healthcheck call GET /api/health, which the frozen interface guarantees.",
+    "In-container HOST=0.0.0.0 is acceptable because compose publishes no host port for the app; Caddy is the only public entrypoint.",
+    "Admin token and entry code are only ever runtime env vars; no secrets appear in any committed file."
+  ],
+  "acceptance_mapping": {
+    "persistent_volume_explicit": "Dockerfile VOLUME /data + ENV DATA_PATH=/data/collection.db; compose named volume collect-data:/data; runbook warns against copying live WAL files and against scaling",
+    "no_cloud_success_claimed": "Runbook states user has no cloud account, nothing deployed or verified; no prices, pricing deferred to vendor sites",
+    "secrets_excluded_from_build": ".dockerignore excludes .env/.env.*/*.pem/*.key/private/materials/private/data participants/artifacts/logs/db; compose fails fast on missing ENTRY_CODE/ADMIN_TOKEN; admin export curl reads token from env"
+  },
+  "remaining": [
+    "Controller to run docker build/compose config and repo tests after the server build script exists.",
+    "User must obtain domain and (if desired) cloud account before any real deployment; ethics/protocol must be finalized before any real participant recruitment."
+  ],
+  "notes": "Commit must be created by the controller (worker has no git tool). Diff kept well under budget; no source/package changes."
+}

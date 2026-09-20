@@ -13,6 +13,8 @@
 
 import { z } from 'zod';
 
+import { CHAT_STREAM_ERROR_CODES } from './chat-events.js';
+import { CHAT_SOURCE_CHOICES_FOR_INVOCATION } from './chat-service.js';
 import { CAPABILITY_KEYS } from './capabilities.js';
 import type { EventEnvelope } from './envelopes.js';
 import { ERROR_CODES } from './errors.js';
@@ -24,9 +26,10 @@ import {
   TRIAL_LEVEL_EVENTS,
 } from './envelopes.js';
 import { PERSISTENCE_SCOPES, SESSION_STATUSES } from './persistence-types.js';
+import { SEMVER_TAG_PATTERN } from './protocol-versions.js';
 import { SOURCE_CHOICES } from './trial-types.js';
 
-const semverTag = z.string().regex(/^\d+\.\d+\.\d+$/, 'expected semver tag');
+const semverTag = z.string().regex(SEMVER_TAG_PATTERN, 'expected semver tag');
 
 const participationMode = z.enum(PARTICIPATION_MODES);
 const deviceClass = z.enum(DEVICE_CLASSES);
@@ -247,6 +250,18 @@ export const trialFeedbackSchema = z
     participant_predicted_winner: z.boolean(),
     advice_target_hit: z.boolean().nullable(),
     advice_actual_hit: z.boolean().nullable(),
+    advice_evaluation: z
+      .object({
+        evaluation_version: z.literal('1.0.0'),
+        advice_exposed: z.boolean(),
+        advice_target_machine_id: z.string().min(1).nullable(),
+        advice_correct: z.boolean().nullable(),
+        independent_matches_advice: z.boolean().nullable(),
+        final_matches_advice: z.boolean().nullable(),
+        switched_to_advice: z.boolean().nullable(),
+        legacy_target_hit_reason: z.literal('undefined_legacy_field'),
+      })
+      .optional(),
     points_awarded: z.number().int(),
     scoring_version: semverTag,
     independent_correct: z.boolean(),
@@ -543,3 +558,150 @@ export type DemoConfigInput = z.input<typeof demoConfigSchema>;
 export type TrialFeedbackInput = z.input<typeof trialFeedbackSchema>;
 export type PublicAdviceBlockInput = z.input<typeof publicAdviceBlockSchema>;
 export type FinalPredictionRecordInput = z.input<typeof finalPredictionRecordSchema>;
+
+/* ----- 0.4.0-rc: streaming chat (U0 contract freeze, no impl yet) ----- */
+
+const chatStreamErrorCodeSchema = z.enum(CHAT_STREAM_ERROR_CODES);
+const chatSourceChoiceForInvocationSchema = z.enum([...CHAT_SOURCE_CHOICES_FOR_INVOCATION] as [
+  string,
+  ...string[],
+]);
+
+/** sha256 hex, exactly 64 lowercase hex characters. */
+const sha256Hex = z.string().regex(/^[0-9a-f]{64}$/);
+
+/** UUID v4 — used for `request_id`, `message_id`, `event_id`. */
+const uuidV4 = z.string().uuid();
+
+const chatMessageMetaSchema = z
+  .object({
+    message_id: uuidV4,
+    request_id: uuidV4,
+    author: z.enum(['assistant']).nullable(),
+    opened_at: z.string().datetime(),
+    adapter_version: z.string().min(1),
+  })
+  .readonly();
+
+const chatStreamEventBaseFields = {
+  event_id: uuidV4,
+  schema_version: semverTag,
+  contract_version: semverTag,
+  client_version: semverTag,
+  material_version: semverTag,
+  protocol_version: z.string().min(1),
+  request_id: uuidV4,
+  message_meta: chatMessageMetaSchema,
+  server_timestamp: z.string().datetime().nullable(),
+} as const;
+
+export const chatStreamEventStartedSchema = z.object({
+  ...chatStreamEventBaseFields,
+  type: z.literal('started'),
+  sequence: z.literal(-1),
+});
+
+export const chatStreamEventTextDeltaSchema = z.object({
+  ...chatStreamEventBaseFields,
+  type: z.literal('text_delta'),
+  sequence: z.number().int().min(0),
+  text: z.string().min(1).max(4096),
+  author: z.enum(['assistant']).nullable(),
+});
+
+export const chatStreamEventCompletedSchema = z.object({
+  ...chatStreamEventBaseFields,
+  type: z.literal('completed'),
+  sequence: z.literal(-1),
+  content_hash: sha256Hex,
+  total_text_deltas: z.number().int().min(0),
+  final: z.literal(true),
+});
+
+export const chatStreamEventCancelledSchema = z.object({
+  ...chatStreamEventBaseFields,
+  type: z.literal('cancelled'),
+  sequence: z.literal(-1),
+  last_sequence: z.number().int().min(-1),
+});
+
+export const chatStreamEventFailedSchema = z.object({
+  ...chatStreamEventBaseFields,
+  type: z.literal('failed'),
+  sequence: z.literal(-1),
+  code: chatStreamErrorCodeSchema,
+  retryable: z.boolean(),
+  error_message: z.string().min(1).max(2000),
+});
+
+export const chatStreamEventSchema = z.discriminatedUnion('type', [
+  chatStreamEventStartedSchema,
+  chatStreamEventTextDeltaSchema,
+  chatStreamEventCompletedSchema,
+  chatStreamEventCancelledSchema,
+  chatStreamEventFailedSchema,
+]);
+
+export type ChatStreamEventStartedInput = z.input<typeof chatStreamEventStartedSchema>;
+export type ChatStreamEventTextDeltaInput = z.input<typeof chatStreamEventTextDeltaSchema>;
+export type ChatStreamEventCompletedInput = z.input<typeof chatStreamEventCompletedSchema>;
+export type ChatStreamEventCancelledInput = z.input<typeof chatStreamEventCancelledSchema>;
+export type ChatStreamEventFailedInput = z.input<typeof chatStreamEventFailedSchema>;
+export type ChatStreamEventInput = z.input<typeof chatStreamEventSchema>;
+
+export const chatRequestSchema = z
+  .object({
+    session_id: z.string().min(1),
+    trial_id: z.string().min(1),
+    advice_id: z.string().min(1),
+    request_id: uuidV4,
+    user_text: z
+      .string()
+      .min(1, 'user_text must not be empty or whitespace-only')
+      .regex(/\S/, 'user_text must not be whitespace-only')
+      .max(2000, 'user_text must not exceed 2000 chars'),
+    source_choice: chatSourceChoiceForInvocationSchema,
+    locale: z.string().min(2).max(35),
+    user_text_chars: z.number().int().min(1).max(2000),
+    client_versions: z.object({
+      contract_version: semverTag,
+      material_version: semverTag,
+      client_version: semverTag,
+      protocol_version: z.string().min(1),
+    }),
+  })
+  .superRefine((value, ctx) => {
+    if (value.user_text_chars !== value.user_text.length) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'user_text_chars must equal user_text.length',
+        path: ['user_text_chars'],
+      });
+    }
+    if (value.user_text.trim().length !== value.user_text.length) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'user_text must be pre-trimmed by the client',
+        path: ['user_text'],
+      });
+    }
+  })
+  .readonly();
+
+export type ChatRequestInput = z.input<typeof chatRequestSchema>;
+
+export type ChatStreamEventSequence = z.infer<typeof chatStreamEventSchema>;
+
+/** Compile-time guarantees used by tests and adapters. */
+export type ChatStreamEventByType = {
+  started: z.infer<typeof chatStreamEventStartedSchema>;
+  text_delta: z.infer<typeof chatStreamEventTextDeltaSchema>;
+  completed: z.infer<typeof chatStreamEventCompletedSchema>;
+  cancelled: z.infer<typeof chatStreamEventCancelledSchema>;
+  failed: z.infer<typeof chatStreamEventFailedSchema>;
+};
+
+/* static re-exports preserve type-only usage in the barrel. */
+export type { ChatStreamEvent, ChatStreamEventType, ChatStreamErrorCode } from './chat-events.js';
+export type { SourceChoice } from './trial-types.js';
+export { CHAT_STREAM_EVENT_TYPES } from './chat-events.js';

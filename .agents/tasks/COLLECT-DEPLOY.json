@@ -1,0 +1,45 @@
+{
+  "scope": {
+    "forbidden_files": [
+      "src/**",
+      "package.json",
+      "package-lock.json"
+    ],
+    "allowed_files": [
+      "deploy/**",
+      "Dockerfile",
+      ".dockerignore",
+      "docs/COLLECTION_DEPLOYMENT.md",
+      ".agents/results/COLLECT-DEPLOY.json"
+    ]
+  },
+  "acceptance": [
+    "Persistent volume explicit",
+    "No cloud success claimed",
+    "Secrets excluded from build"
+  ],
+  "budget": {
+    "max_retries": 2,
+    "max_diff_lines": 850,
+    "max_minutes": 15,
+    "max_files_changed": 8
+  },
+  "goal": "Prepare deployable artifacts and Chinese operation runbook for the collection pilot described in .agents/architecture.md. User has no cloud accounts: NO actual deployment, no purchases, no claims cloud verified. Dockerfile multi-stage Node24 npm ci then npm run build:all, serve dist and dist-server/main.js; persistent /data SQLite volume, one replica, non-root where practical. Compose+Caddy HTTPS reverse proxy example using env DOMAIN/ENTRY_CODE/ADMIN_TOKEN, secrets never in frontend. Health check /api/health. Explain local deployment, domain HTTPS, cloud VM options without invented prices, backup/restore WAL safely via sqlite backup rather than copying live db, admin export curl without credentials in source, tests to run after deployment, trial recruitment forbidden until ethics/protocol finalized. Include .dockerignore to exclude .env/private/artifacts/research and logs. Worker has no network; avoid current pricing claims. Controller will audit configs. Output progress/final .agents/results/COLLECT-DEPLOY.json. No package or source changes.",
+  "task_id": "COLLECT-DEPLOY",
+  "risk": "medium",
+  "context": {
+    "entry_files": [
+      ".agents/architecture.md",
+      "AGENTS.md",
+      "docs/CONTRACTS.md",
+      "src/contracts/interfaces.ts"
+    ],
+    "worker_worktree": "E:/Info_AI_workers/paper2-20260919-deploy",
+    "base_worktree": "E:/Info_AI_workers/paper2-20260919-base"
+  },
+  "output": {
+    "result_json_required": true,
+    "commit_required": true
+  },
+  "verifier": []
+}

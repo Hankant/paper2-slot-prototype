@@ -1,0 +1,38 @@
+{
+  "task_id": "COLLECT-DEPLOY-REVIEW",
+  "output": {
+    "commit_required": true,
+    "result_json_required": true
+  },
+  "context": {
+    "base_worktree": "E:/Info_AI_workers/paper2-20260919-deploy",
+    "worker_worktree": "E:/Info_AI_workers/paper2-20260919-deploy-review",
+    "entry_files": [
+      ".agents/architecture.md",
+      "Dockerfile",
+      "deploy/docker-compose.yml",
+      "deploy/Caddyfile",
+      "docs/COLLECTION_DEPLOYMENT.md"
+    ]
+  },
+  "scope": {
+    "allowed_files": [
+      ".agents/results/COLLECT-DEPLOY-REVIEW.json"
+    ],
+    "forbidden_files": [
+      "src/**",
+      "server/**",
+      "deploy/**",
+      "Dockerfile"
+    ]
+  },
+  "goal": "Read-only review of Dockerfile, deploy/docker-compose.yml, deploy/Caddyfile and docs/COLLECTION_DEPLOYMENT.md against .agents/architecture.md. Find real executable-command defects, missing build files, non-root/volume permission issues, wrong environment or secret claims, misleading tested status. Do not modify implementation. Write .agents/results/COLLECT-DEPLOY-REVIEW.json with status candidate_success, findings [{priority,file,issue,fix}], checked_paths, validation_not_run. No shell/network tools; inspect files only.",
+  "verifier": [],
+  "budget": {
+    "max_diff_lines": 350,
+    "max_retries": 1,
+    "max_minutes": 10,
+    "max_files_changed": 1
+  },
+  "risk": "medium"
+}

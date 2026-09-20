@@ -1,0 +1,24 @@
+{
+  "task_id": "COLLECT-CLIENT",
+  "status": "needs_review",
+  "exit_code": 1,
+  "timed_out": false,
+  "duration_seconds": 508,
+  "kimi_tokens": null,
+  "cost": null,
+  "tool_calls": null,
+  "base_commit": "e2640a20aacd54c6b32524dee855a2e3d5dcec76",
+  "commit": "f0c543e0274a2a0c6376d9c5ba1e485a4cc68856",
+  "changed_files": [
+    "projects/paper2-slot-prototype/.agents/results/COLLECT-CLIENT.json",
+    "projects/paper2-slot-prototype/src/adapters/http/remote-adapter.ts",
+    "projects/paper2-slot-prototype/src/persistence/retry-queue.ts"
+  ],
+  "scope_violations": [],
+  "diff_lines": 563,
+  "budget_exceeded": false,
+  "checks": [],
+  "requires_codex_review": true,
+  "os_sandbox": false,
+  "tool_scope_enforced": true
+}

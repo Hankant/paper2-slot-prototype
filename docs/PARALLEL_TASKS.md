@@ -65,3 +65,7 @@ B 使用 A 的静态接口 fixture，避免等 D 材料才开始页面；C 使�
 遇到需要其他模块配合的问题：写清契约版本、最小复现、预期行为和需要的变更；不通过复制另一个实现来绕开。共享类型/锁文件仅 A 修改。
 
 若在独立 Git worktree 开发，使用 `codex/` 前缀分支；当前工作区是父仓库子目录，建 worktree 不等于仅复制子目录。是否采用 worktree 由 A 根据当轮环境决定，不对未提交研究文件做自动迁移。共享工作目录模式下严格遵守路径所有权即可。
+
+## 2026-09-18 Codex 界面接手登记
+
+用户授权先核验底层、再由 Codex 接手设计与修复。本轮同一 Codex 顺序承担单题原型所需 A/B/C/D/Q 工作，涉及 contracts、domain、adapters/local-demo、adapters/local-chat、experiment、ui、bootstrap-immersive、相关测试和当前文档。没有启动其他 agent。当前完成范围和后续任务见 STATUS 与 ATELIER_IMPLEMENTATION；原多 agent 划分仍用于后续明确派发。
