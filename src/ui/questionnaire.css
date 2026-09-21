@@ -1,0 +1,202 @@
+.questionnaire-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 5000;
+  overflow-y: auto;
+  background: #f3f0e8;
+  color: #17332c;
+}
+.questionnaire-shell {
+  width: min(900px, calc(100% - 36px));
+  margin: 0 auto;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+.questionnaire-shell header,
+.questionnaire-shell footer {
+  min-height: 68px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(23, 51, 44, 0.16);
+  color: #63766e;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.questionnaire-shell footer {
+  border: 0;
+  border-top: 1px solid rgba(23, 51, 44, 0.16);
+  margin-top: 40px;
+}
+.questionnaire-shell main {
+  flex: 1;
+  padding: 54px 0 20px;
+}
+.questionnaire-shell h1 {
+  margin: 8px 0 12px;
+  color: #17332c;
+  font-size: clamp(30px, 5vw, 52px);
+  line-height: 1.1;
+}
+.questionnaire-intro {
+  color: #63766e;
+  line-height: 1.8;
+  margin: 0 0 34px;
+}
+.questionnaire-items {
+  display: grid;
+  gap: 18px;
+}
+.questionnaire-item {
+  margin: 0;
+  padding: 24px;
+  border: 1px solid rgba(23, 51, 44, 0.16);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.62);
+}
+.questionnaire-item.invalid {
+  border-color: #a33c2f;
+}
+.questionnaire-item legend {
+  width: 100%;
+  font-size: 17px;
+  font-weight: 650;
+  line-height: 1.55;
+}
+.questionnaire-item legend > span {
+  display: inline-block;
+  margin-right: 12px;
+  color: #a47735;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+}
+.questionnaire-item legend em {
+  margin-left: 10px;
+  color: #7b8983;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 500;
+}
+.questionnaire-item > p {
+  color: #63766e;
+  font-size: 12px;
+}
+.questionnaire-choices {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+.questionnaire-choices label {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  min-height: 48px;
+  padding: 10px 14px;
+  border: 1px solid rgba(23, 51, 44, 0.16);
+  border-radius: 8px;
+  cursor: pointer;
+}
+.questionnaire-choices label:has(input:checked) {
+  border-color: #17332c;
+  background: #e4ebe4;
+}
+.questionnaire-slider-wrap {
+  margin-top: 18px;
+}
+.questionnaire-slider-wrap input {
+  width: 100%;
+}
+.questionnaire-slider-value {
+  margin-bottom: 8px;
+  color: #a47735;
+  font-size: 22px;
+  font-weight: 700;
+}
+.questionnaire-scale-labels,
+.questionnaire-likert {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: #63766e;
+  font-size: 11px;
+}
+.questionnaire-likert {
+  align-items: center;
+  margin-top: 18px;
+}
+.questionnaire-likert-options {
+  display: flex;
+  gap: 7px;
+}
+.questionnaire-likert-options label {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid rgba(23, 51, 44, 0.2);
+  border-radius: 50%;
+  cursor: pointer;
+}
+.questionnaire-likert-options label:has(input:checked) {
+  color: white;
+  border-color: #17332c;
+  background: #17332c;
+}
+.questionnaire-likert-options input {
+  position: absolute;
+  opacity: 0;
+}
+.questionnaire-item textarea,
+.questionnaire-item input[type='text'] {
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 16px;
+  padding: 13px 14px;
+  border: 1px solid rgba(23, 51, 44, 0.25);
+  border-radius: 8px;
+  color: #17332c;
+  background: white;
+  font: inherit;
+  resize: vertical;
+}
+.questionnaire-item-error,
+.questionnaire-form-error {
+  min-height: 20px;
+  margin-top: 8px;
+  color: #a33c2f;
+  font-size: 12px;
+}
+.questionnaire-shell form > .primary {
+  margin-top: 22px;
+  margin-left: auto;
+}
+@media (max-width: 620px) {
+  .questionnaire-shell {
+    width: min(100% - 24px, 900px);
+  }
+  .questionnaire-shell main {
+    padding-top: 32px;
+  }
+  .questionnaire-item {
+    padding: 18px 14px;
+  }
+  .questionnaire-item legend {
+    font-size: 15px;
+  }
+  .questionnaire-likert {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .questionnaire-likert-options {
+    justify-content: space-between;
+  }
+  .questionnaire-likert-options label {
+    width: 34px;
+    height: 34px;
+  }
+  .questionnaire-shell form > .primary {
+    width: 100%;
+  }
+}

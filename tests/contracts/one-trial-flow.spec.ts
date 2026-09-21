@@ -5,6 +5,7 @@ import {
 } from '../../src/adapters/local-demo/one-trial-preview.js';
 import {
   capabilitiesSchema,
+  CLIENT_VERSION,
   CONTRACT_VERSION,
   parseEventEnvelope,
   publicTrialSchema,
@@ -24,7 +25,7 @@ async function setup() {
     client_versions: {
       contract_version: CONTRACT_VERSION,
       material_version: '0.3.0',
-      client_version: '0.3.0',
+      client_version: CLIENT_VERSION,
       protocol_version: 'unreleased',
     },
   });
@@ -34,7 +35,7 @@ function event(session: Session, sequence: number, type: string, payload: unknow
   return parseEventEnvelope({
     schema_version: '0.3.0',
     contract_version: CONTRACT_VERSION,
-    client_version: '0.3.0',
+    client_version: CLIENT_VERSION,
     material_version: '0.3.0',
     protocol_version: 'unreleased',
     session_id: session.session_id,

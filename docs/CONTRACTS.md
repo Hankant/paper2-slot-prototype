@@ -1,6 +1,14 @@
 # 公共接口规格
 
-版本：**0.3.0，2026-09-18 工程基线**。本轮修复 0.2.0 的接口集成缺陷；正式研究方案仍 unreleased。精确类型以 src/contracts/index.ts 及 validators.ts 为准。
+版本：**0.4.0，2026-09-21 问卷事件增量**。0.3.0 的试次、反馈和聊天接口保持原语义；新增可重复的前测/后测区块事件。正式研究方案仍 unreleased。精确类型以 src/contracts/index.ts 及 validators.ts 为准。
+
+## 2026-09-21 问卷增量
+
+新增 `questionnaire_block_submitted`。载荷包含 `block_id`、`instrument_version`、`wording_profile`、`position`、实际呈现的 `item_order`，以及逐题原始值、跳过状态和作答时间。问卷是会话级事件，不携带 `trial_id`；前测使用 `profile` 阶段，后测使用 `finalizing` 阶段。
+
+同一会话可以保存多个问卷区块，因此运行控制器以 `event_type:block_id` 作为问卷记录键。相同区块的网络重试复用原 `event_id`；不同区块不能因事件类型相同而互相覆盖。后测区块全部获得保存回执后，客户端才写入 `session_completion_requested` 并请求完成会话。
+
+当前演示问卷内容集中在 `src/domain/questionnaire-instrument-demo.ts`。通用题型、配置校验和呈现组件不包含具体题目文案。
 
 ## 2026-09-18 单题预览增量
 
@@ -29,19 +37,20 @@ TrialFeedback 新增可选 advice_evaluation（evaluation_version 1.0.0），明
 
 EventEnvelope 是按 event_type 区分的 TypeScript 联合类型；来自网络/缓存的 unknown 先用 parseEventEnvelope 校验。运行时保留已验证的 payload；不能将其丢弃后称为已保存。
 
-| 事件                         | payload                                            | trial_id                                 |
-| ---------------------------- | -------------------------------------------------- | ---------------------------------------- |
-| consent_recorded             | version                                            | 禁止；新版演示入口已接入，正式文本待确认 |
-| profile_submitted            | fields                                             | 禁止；真实字段仍待研究确定               |
-| comprehension_answered       | question_id, answer, correct                       | 可选，说明页不伪造试次                   |
-| prediction_submitted         | machine_id, display_position                       | 必需；独立预测                           |
-| confidence_submitted         | confidence_percent                                 | 必需；0—100                              |
-| source_selected              | source                                             | 必需；不要求此时已有最终答案             |
-| advice_revealed              | advice_id, revealed_at_phase                       | 必需；建议已可见后记录                   |
-| final_prediction_submitted   | machine_id, display_position, changed_after_advice | 必需；与独立预测分开                     |
-| feedback_presented           | presented_at_ms                                    | 必需；先获取/展示反馈，再记录            |
-| visibility_changed           | element_id, visible                                | 可选，会话级页面可不属于试次             |
-| session_completion_requested | ack_required_event_count                           | 禁止                                     |
+| 事件                          | payload                                            | trial_id                                 |
+| ----------------------------- | -------------------------------------------------- | ---------------------------------------- |
+| consent_recorded              | version                                            | 禁止；新版演示入口已接入，正式文本待确认 |
+| profile_submitted             | fields                                             | 禁止；真实字段仍待研究确定               |
+| comprehension_answered        | question_id, answer, correct                       | 可选，说明页不伪造试次                   |
+| prediction_submitted          | machine_id, display_position                       | 必需；独立预测                           |
+| confidence_submitted          | confidence_percent                                 | 必需；0—100                              |
+| source_selected               | source                                             | 必需；不要求此时已有最终答案             |
+| advice_revealed               | advice_id, revealed_at_phase                       | 必需；建议已可见后记录                   |
+| final_prediction_submitted    | machine_id, display_position, changed_after_advice | 必需；与独立预测分开                     |
+| feedback_presented            | presented_at_ms                                    | 必需；先获取/展示反馈，再记录            |
+| visibility_changed            | element_id, visible                                | 可选，会话级页面可不属于试次             |
+| questionnaire_block_submitted | block/version/profile/position/order/responses     | 禁止；前测与后测区块分别保存             |
+| session_completion_requested  | ack_required_event_count                           | 禁止                                     |
 
 source 的 human/ai/mixed/no_advice_shown 是接口保留值，不代表正式实验条件已确认。当前单题预览仅用 human（明确表示自己）和 ai（模拟建议），不实施 mixed 条件。没有建议的正式阶段应另明确完成规则，不伪造 source_selected。
 
@@ -50,9 +59,10 @@ source 的 human/ai/mixed/no_advice_shown 是接口保留值，不代表正式�
 旧 preview.html 跳过知情同意与资料页，从 main 开始。新版 preview-immersive.html 必须先完成演示同意与说明；开始按钮点击后建立会话，以 consent 阶段保存 consent_recorded（payload.version），无 trial_id，再进入 main。可选 requireConsentVersion 会校验同意版本并阻止未同意时加载试次；默认关闭以兼容旧入口。两页均不收集个人资料。演示固定为：
 
 ```text
-独立预测保存 → 信心保存 → 来源选择保存 → 读取并展示建议
+同意保存 → 前测区块逐项保存 → 独立预测保存 → 信心保存
+→ 来源选择保存 → 读取并展示建议
 → 建议展示事件保存 → 最终预测保存 → 读取并展示反馈
-→ 反馈展示事件保存 → 完成请求保存 → finishSession
+→ 反馈展示事件保存 → 后测区块逐项保存 → 完成请求保存 → finishSession
 ```
 
 这是明确的模拟设置，正式 T03 不因此定稿。配置中的 after_choice 在本预览指独立预测后，预览还要求来源选择先确认；before_choice/none 与多题实验仍由 B/C/D 按将来选定协议实施，不声称该单题服务覆盖所有模式。
@@ -80,7 +90,7 @@ one-trial-preview 仅在内存保留事件；已验证内存幂等，不支持�
 
 ## 版本与责任
 
-当前 contract/schema/client 为 0.3.0，演示材料为 0.3.0，demo 配置为 demo-0.3.0；正式 protocol=unreleased。已有实验会话不得中途换版。本次没有真实样本需要迁移。
+当前 contract/client 为 0.4.0，schema、演示材料为 0.3.0，demo 配置标识仍为 demo-0.3.0；正式 protocol=unreleased。0.3.0 已开始的会话不应中途换版；当前没有正式真实样本需要迁移。
 
 A 唯一维护共享接口、依赖、bootstrap 和版本。B/C/D 按职责表实施；修改字段先交 A 协调。推荐公共 import '@contracts'，裸别名与子路径在 TS/Vite/Vitest 三处均配置，并经过真实消费者验证。
 

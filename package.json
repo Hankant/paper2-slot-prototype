@@ -23,10 +23,12 @@
     "swarm": "node tools/swarmctl.ts",
     "test:collection": "playwright test --config playwright.collection.config.ts",
     "collect:local": "node tools/collection-local.ts start",
+    "collect:campus": "node tools/campus-local.ts",
     "collect:export": "node tools/collection-local.ts export",
     "collect:backup": "node tools/collection-local.ts backup"
   },
   "dependencies": {
+    "@noble/hashes": "2.4.0",
     "jspsych": "^7.3.4",
     "uuid": "^9.0.1",
     "zod": "^3.23.8"

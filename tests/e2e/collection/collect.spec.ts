@@ -8,6 +8,10 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createCollectionServer, type CollectionServer } from '../../../server/app.js';
+import {
+  completePostQuestionnaires,
+  completePreQuestionnaires,
+} from '../../helpers/questionnaire.js';
 
 const ENTRY_CODE = 'E2E-ENTRY-01';
 const ADMIN_TOKEN = 'e2e-admin-token-0123456789abcdef';
@@ -95,6 +99,7 @@ async function enter(page: Page): Promise<void> {
   await enterAccess(page, ENTRY_CODE);
   await completeConsent(page);
   await page.getByRole('button', { name: /开始实验/ }).click();
+  await completePreQuestionnaires(page);
   await expect(page.getByRole('button', { name: '选择机器 A', exact: true })).toBeVisible();
 }
 
@@ -121,6 +126,7 @@ async function finalizeAndWaitDone(page: Page, machine: string): Promise<void> {
   await page.getByRole('button', { name: /锁定最终预测/ }).click();
   await page.getByRole('button', { name: '拉杆开奖', exact: true }).click();
   await expect(page.locator('.result-card')).toContainText('机器 C 中奖');
+  await completePostQuestionnaires(page);
   await expect(page.locator('#step-label')).toHaveText('本轮完成', { timeout: 20_000 });
 }
 
@@ -164,6 +170,7 @@ test('correct entry code passes consent and instructions gating into the trial',
   // Instructions: no trial UI before the explicit start.
   await expect(page.getByRole('button', { name: '选择机器 A' })).toHaveCount(0);
   await page.getByRole('button', { name: /开始实验/ }).click();
+  await completePreQuestionnaires(page);
   await expect(page.getByRole('button', { name: '选择机器 A', exact: true })).toBeVisible();
 
   // The session now exists server-side and records the observed mode/device.
@@ -190,12 +197,18 @@ test('full AI-branch trial: advice, final answer, feedback and durable finish', 
   expect(data.completed).toBe(true);
   expect(data.events.map((event) => event.event_type)).toEqual([
     'consent_recorded',
+    'questionnaire_block_submitted',
+    'questionnaire_block_submitted',
     'prediction_submitted',
     'confidence_submitted',
     'source_selected',
     'advice_revealed',
     'final_prediction_submitted',
     'feedback_presented',
+    'questionnaire_block_submitted',
+    'questionnaire_block_submitted',
+    'questionnaire_block_submitted',
+    'questionnaire_block_submitted',
     'session_completion_requested',
   ]);
   expectNoDuplicateEvents(data.events);
@@ -233,12 +246,14 @@ test('reload mid-trial restores server progress and never duplicates events', as
 
   const data = await exportOwn(page);
   expect(data.completed).toBe(true);
-  expect(data.events).toHaveLength(7);
+  expect(data.events).toHaveLength(13);
   expectNoDuplicateEvents(data.events);
   expect(data.events.filter((event) => event.event_type === 'prediction_submitted')).toHaveLength(
     1,
   );
-  expect(data.events[1]?.payload.machine_id).toBe('A');
+  expect(
+    data.events.find((event) => event.event_type === 'prediction_submitted')?.payload.machine_id,
+  ).toBe('A');
   expect(data.feedback?.final_correct).toBe(true);
   expect(data.feedback?.points_awarded).toBe(10);
   expect(data.feedback?.advice_evaluation.advice_exposed).toBe(false);

@@ -137,4 +137,61 @@ describe('contracts: event envelope (post-R1)', () => {
     });
     expect(result.success).toBe(false);
   });
+
+  it('accepts a questionnaire block without trial_id and preserves typed responses', () => {
+    const result = eventEnvelopeSchema.safeParse({
+      ...entryEnvelope,
+      event_type: 'questionnaire_block_submitted',
+      phase: 'profile',
+      payload: {
+        block_id: 'pre-prior-beliefs',
+        instrument_version: 'demo-questionnaire-0.1.0',
+        wording_profile: 'SELF_AI',
+        position: 'pre',
+        item_order: ['PRE_PRIOR_ACC_SELF', 'PRE_PRIOR_ACC_AI'],
+        responses: [
+          {
+            item_id: 'PRE_PRIOR_ACC_SELF',
+            value: 60,
+            skipped: false,
+            response_ms: 1200,
+          },
+          {
+            item_id: 'PRE_PRIOR_ACC_AI',
+            value: 70,
+            skipped: false,
+            response_ms: 1800,
+          },
+        ],
+      },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects questionnaire blocks with trial_id or invalid response timing', () => {
+    const payload = {
+      block_id: 'post-trust',
+      instrument_version: 'demo-questionnaire-0.1.0',
+      wording_profile: 'SELF_AI',
+      position: 'post',
+      item_order: ['POST_PT_AI_RELIABLE'],
+      responses: [
+        {
+          item_id: 'POST_PT_AI_RELIABLE',
+          value: 5,
+          skipped: false,
+          response_ms: -1,
+        },
+      ],
+    };
+    expect(
+      eventEnvelopeSchema.safeParse({
+        ...entryEnvelope,
+        event_type: 'questionnaire_block_submitted',
+        phase: 'finalizing',
+        trial_id: 'trial-001',
+        payload,
+      }).success,
+    ).toBe(false);
+  });
 });

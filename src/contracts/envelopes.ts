@@ -80,6 +80,7 @@ export const EXPERIMENT_EVENT_TYPES = [
   'advice_revealed',
   'feedback_presented',
   'visibility_changed',
+  'questionnaire_block_submitted',
   'session_completion_requested',
 ] as const;
 
@@ -99,6 +100,7 @@ export const TRIAL_LEVEL_EVENTS: ReadonlyArray<ExperimentEventType> = [
 export const ENTRY_LEVEL_EVENTS: ReadonlyArray<ExperimentEventType> = [
   'consent_recorded',
   'profile_submitted',
+  'questionnaire_block_submitted',
   'session_completion_requested',
 ];
 
@@ -128,6 +130,19 @@ export interface EventPayloadMap {
   advice_revealed: { advice_id: string; revealed_at_phase: ExperimentPhase };
   feedback_presented: { presented_at_ms: number };
   visibility_changed: { element_id: string; visible: boolean };
+  questionnaire_block_submitted: {
+    block_id: string;
+    instrument_version: string;
+    wording_profile: 'SELF_AI' | 'HUMAN_AI';
+    position: 'pre' | 'post';
+    item_order: string[];
+    responses: Array<{
+      item_id: string;
+      value: string | number | string[] | null;
+      skipped: boolean;
+      response_ms: number;
+    }>;
+  };
   session_completion_requested: { ack_required_event_count: number };
 }
 
@@ -138,7 +153,11 @@ type RequiredTrialEvent =
   | 'final_prediction_submitted'
   | 'advice_revealed'
   | 'feedback_presented';
-type EntryEvent = 'consent_recorded' | 'profile_submitted' | 'session_completion_requested';
+type EntryEvent =
+  | 'consent_recorded'
+  | 'profile_submitted'
+  | 'questionnaire_block_submitted'
+  | 'session_completion_requested';
 export type EventEnvelope = {
   [K in ExperimentEventType]: Omit<EventEnvelopeBase, 'event_type' | 'payload' | 'trial_id'> & {
     readonly event_type: K;

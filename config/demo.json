@@ -3,11 +3,11 @@
   "simulation": true,
   "provider": "local-demo",
   "study_id": "paper2-slot-prototype",
-  "contract_version": "0.3.0",
+  "contract_version": "0.4.0",
   "protocol_version": "unreleased",
   "material_version": "0.3.0",
   "adapter_version": "0.3.0",
-  "client_version": "0.3.0",
+  "client_version": "0.4.0",
   "entry_code_placeholder": "DEMO-ENTRY-CODE-001",
   "task_definition": "Predict the machine that will hit on the next spin. The reward is determined by the actual spin outcome; choosing a higher-probability machine does not guarantee a reward.",
   "phase_order": [

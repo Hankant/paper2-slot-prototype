@@ -2,7 +2,9 @@ import {
   createOneTrialPreview,
   PREVIEW_TRIAL_ID,
 } from '../adapters/local-demo/one-trial-preview.js';
+import { randomId } from '../uuid.js';
 import {
+  CLIENT_VERSION,
   CONTRACT_VERSION,
   parseEventEnvelope,
   publicTrialSchema,
@@ -39,12 +41,12 @@ async function save(type: string, payload: unknown): Promise<void> {
   const event = parseEventEnvelope({
     schema_version: '0.3.0',
     contract_version: CONTRACT_VERSION,
-    client_version: '0.3.0',
+    client_version: CLIENT_VERSION,
     material_version: '0.3.0',
     protocol_version: 'unreleased',
     session_id: session.session_id,
     participant_id: session.participant_id,
-    event_id: crypto.randomUUID(),
+    event_id: randomId(),
     sequence_no: sequence,
     phase: 'main',
     event_type: type,
@@ -167,7 +169,7 @@ async function initialize(): Promise<void> {
     client_versions: {
       contract_version: CONTRACT_VERSION,
       material_version: '0.3.0',
-      client_version: '0.3.0',
+      client_version: CLIENT_VERSION,
       protocol_version: 'unreleased',
     },
   });

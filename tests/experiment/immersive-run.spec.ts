@@ -9,7 +9,12 @@ import { STANDARD_QUESTION } from '../../src/domain/chat-materials.js';
 import { evaluateAdvice } from '../../src/domain/advice-evaluation.js';
 import { ImmersiveRun } from '../../src/experiment/immersive-run.js';
 import { readChatStream } from '../../src/experiment/chat-stream-reader.js';
-import { type ChatRequest, type ChatStreamEvent } from '@contracts';
+import {
+  CLIENT_VERSION,
+  CONTRACT_VERSION,
+  type ChatRequest,
+  type ChatStreamEvent,
+} from '@contracts';
 
 async function setup() {
   const adapter = createOneTrialPreview({ adviceForSelf: false });
@@ -29,8 +34,8 @@ function request(run: ImmersiveRun): ChatRequest {
     source_choice: 'ai',
     locale: 'zh-CN',
     client_versions: {
-      contract_version: '0.3.0',
-      client_version: '0.3.0',
+      contract_version: CONTRACT_VERSION,
+      client_version: CLIENT_VERSION,
       material_version: '0.3.0',
       protocol_version: 'unreleased',
     },
@@ -46,6 +51,64 @@ async function* rawStream(events: unknown[]) {
 }
 
 describe('usable runtime services for the immersive preview', () => {
+  it('persists distinct pre/post questionnaire blocks before session completion', async () => {
+    const adapter = createOneTrialPreview({ adviceForSelf: false });
+    const run = new ImmersiveRun(adapter, PREVIEW_TRIAL_ID, {
+      beforeCompletion: async () => {
+        await run.submitQuestionnaireBlock({
+          block_id: 'post-trust',
+          instrument_version: 'demo-questionnaire-0.1.0',
+          wording_profile: 'SELF_AI',
+          position: 'post',
+          item_order: ['POST_PT_AI_RELIABLE'],
+          responses: [
+            {
+              item_id: 'POST_PT_AI_RELIABLE',
+              value: 5,
+              skipped: false,
+              response_ms: 500,
+            },
+          ],
+        });
+      },
+    });
+    await run.initialize();
+    await run.submitQuestionnaireBlock({
+      block_id: 'pre-prior-beliefs',
+      instrument_version: 'demo-questionnaire-0.1.0',
+      wording_profile: 'SELF_AI',
+      position: 'pre',
+      item_order: ['PRE_PRIOR_ACC_SELF'],
+      responses: [
+        {
+          item_id: 'PRE_PRIOR_ACC_SELF',
+          value: 60,
+          skipped: false,
+          response_ms: 400,
+        },
+      ],
+    });
+    expect(run.hasQuestionnaireBlock('pre-prior-beliefs')).toBe(true);
+    expect(run.hasQuestionnaireBlock('post-trust')).toBe(false);
+    await run.predict('A', 60);
+    await run.chooseSource('human');
+    await run.confirmFinal('C');
+    const feedback = await run.startDraw();
+    await run.presentFeedback(feedback);
+
+    const events = adapter.exportEvents();
+    const questionnaireEvents = events.filter(
+      (event) => event.event_type === 'questionnaire_block_submitted',
+    );
+    expect(questionnaireEvents.map((event) => event.payload.block_id)).toEqual([
+      'pre-prior-beliefs',
+      'post-trust',
+    ]);
+    expect(questionnaireEvents.every((event) => event.trial_id === undefined)).toBe(true);
+    expect(events.at(-1)?.event_type).toBe('session_completion_requested');
+    expect(run.completed).toBe(true);
+  });
+
   it('consent-enabled adapter blocks missing and mismatched consent before loading a trial', async () => {
     const adapter = createOneTrialPreview({ requireConsentVersion: 'preview-consent-test-v1' });
     const missing = new ImmersiveRun(adapter, PREVIEW_TRIAL_ID);

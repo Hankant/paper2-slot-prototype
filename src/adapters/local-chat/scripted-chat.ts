@@ -6,6 +6,7 @@ import {
   type RevealedAdviceBlock,
 } from '@contracts';
 import { textHash } from '../../domain/text-hash.js';
+import { randomId } from '../../uuid.js';
 import { STANDARD_QUESTION, FOLLOWUP_QUESTION } from '../../domain/chat-materials.js';
 
 interface Reply {
@@ -73,7 +74,7 @@ export function createScriptedChat(
         for (let i = 0; i < chars.length; i += 2) chunks.push(chars.slice(i, i + 2).join(''));
         reply = {
           request: fingerprint,
-          messageId: crypto.randomUUID(),
+          messageId: randomId(),
           openedAt: new Date().toISOString(),
           chunks,
           delivered: 0,
@@ -98,13 +99,13 @@ export function createScriptedChat(
       };
       let last = -1;
       try {
-        yield { ...base, event_id: crypto.randomUUID(), type: 'started', sequence: -1 };
+        yield { ...base, event_id: randomId(), type: 'started', sequence: -1 };
         if (previous === 0) await pause(timing.firstMs, signal);
         for (let i = 0; i < reply.chunks.length; i += 1) {
           if (signal.aborted) {
             yield {
               ...base,
-              event_id: crypto.randomUUID(),
+              event_id: randomId(),
               type: 'cancelled',
               sequence: -1,
               last_sequence: last,
@@ -115,7 +116,7 @@ export function createScriptedChat(
           if (signal.aborted) {
             yield {
               ...base,
-              event_id: crypto.randomUUID(),
+              event_id: randomId(),
               type: 'cancelled',
               sequence: -1,
               last_sequence: last,
@@ -128,7 +129,7 @@ export function createScriptedChat(
           if (text === undefined) throw new Error('缺少脚本片段');
           yield {
             ...base,
-            event_id: crypto.randomUUID(),
+            event_id: randomId(),
             type: 'text_delta',
             sequence: i,
             text,
@@ -137,7 +138,7 @@ export function createScriptedChat(
         }
         yield {
           ...base,
-          event_id: crypto.randomUUID(),
+          event_id: randomId(),
           type: 'completed',
           sequence: -1,
           content_hash: await textHash(reply.chunks.join('')),

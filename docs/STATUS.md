@@ -1,5 +1,7 @@
 # 当前工程状态
 
+2026-09-21 更新：前测与后测已接入单轮沉浸式预览和 SQLite 收集入口。contract/client 升至 0.4.0；问卷支持多区块独立幂等保存、刷新去重、后测完成门控和手机布局。题目集中在 `src/domain/questionnaire-instrument-demo.ts`。当前题项仍为可预测试草案；T04 比较对象、T07 个人信息和量表验证仍待确定。
+
 2026-09-19 更新：新增 collect.html + HTTP adapter + SQLite 单轮采集链路。本机保存、重试、刷新恢复和管理员导出已实现。当前以 [采集试点说明](COLLECTION_PILOT.md) 与 [验收交接](../handoffs/A/2026-09-19-collection-final.md) 为准。公网部署仅有方案，尚无云资源；正式 jsPsych timeline 与真实模型仍待实施。用户已要求停止 Kimi/多 agent，后续由 Codex 直接推进。
 
 ## 2026-09-18 历史状态（以下不覆盖当前采集入口）

@@ -15,6 +15,8 @@ import {
   COLLECTION_MATERIAL,
   type CollectionEntryAcknowledgement,
 } from './domain/collection-materials.js';
+import { QUESTIONNAIRE_INSTRUMENT } from './domain/questionnaire-instrument-demo.js';
+import { mountQuestionnaireSequence } from './ui/questionnaire-overlay.js';
 
 function detectDeviceClass(): DeviceClass {
   if (/ipad|tablet|kindle|playbook/i.test(navigator.userAgent)) return 'tablet';
@@ -54,7 +56,14 @@ async function startCollection(
     },
   };
   let timer: ReturnType<typeof setTimeout> | undefined;
-  const run = new ImmersiveRun(adapter, 'preview-trial-1', {
+  const root = requireElement(document, '#paper2-immersive-root');
+  function questionnaire(position: 'pre' | 'post'): Promise<void> {
+    return mountQuestionnaireSequence(root, QUESTIONNAIRE_INSTRUMENT, position, {
+      isSubmitted: (blockId) => run.hasQuestionnaireBlock(blockId),
+      submit: (payload) => run.submitQuestionnaireBlock(payload),
+    });
+  }
+  const run: ImmersiveRun = new ImmersiveRun(adapter, 'preview-trial-1', {
     credential,
     ...(snapshot ? { snapshot } : {}),
     onAudit: (record) => {
@@ -68,6 +77,7 @@ async function startCollection(
         }, 500);
     },
     flushAudit: () => adapter.flushPending(),
+    beforeCompletion: () => questionnaire('post'),
   });
   const accepted = entry ?? (snapshot?.entry as CollectionEntryAcknowledgement);
   await run.initialize({ version: accepted.consent_version, acceptedAt: accepted.accepted_at });
@@ -80,6 +90,7 @@ async function startCollection(
       consent_version: accepted.consent_version,
       instructions_version: accepted.instructions_version,
     });
+  if (!run.restored || run.stage === 'prediction') await questionnaire('pre');
   if (run.stage === 'feedback') await run.resumeFeedback();
   mountImmersive(
     run,

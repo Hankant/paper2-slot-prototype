@@ -1,6 +1,6 @@
 # Paper 2：老虎机实验原型
 
-更新时间：2026-09-19。当前接口基线 **0.3.0**。单轮服务器采集试点已实现，本机持久保存、刷新恢复、导出可用；完整 jsPsych 多轮实验、真实 AI 与公网部署仍未完成。
+更新时间：2026-09-21。当前接口基线 **0.4.0**。单轮服务器采集试点及前测/后测问卷已实现，本机持久保存、刷新恢复、导出可用；完整 jsPsych 多轮实验、真实 AI 与公网部署仍未完成。
 
 优先使用 [数据收集试点运行说明](docs/COLLECTION_PILOT.md)：`npm run build:all` 后运行 `npm run collect:local`，打开 http://127.0.0.1:5200/collect.html ，本机默认参与码 `PAPER2-LOCAL`。以下旧预览地址仍只保存页面内存。
 
@@ -23,6 +23,8 @@ npm run dev -- --port 5197
 ## 接手顺序
 
 新增规划：[老虎机与 AI 聊天界面升级方案](docs/IMMERSIVE_UI_PLAN.md)。涵盖机柜/转轮、高仿真聊天、流式回答、DeepSeek 接口与分阶段验收。
+
+前测、理解检验与后测的研究测量方案见 [问卷模块设计](docs/QUESTIONNAIRE_MODULE_DESIGN.md)。演示题目全部集中在 [questionnaire-instrument-demo.ts](src/domain/questionnaire-instrument-demo.ts)；以后修改题目、选项和区块顺序只需编辑该文件。该方案明确区分当前原型的“自己—AI”与 Paper 2 理论上的“Human—AI”，题项仍是可预测试草案，不是正式验证量表。
 
 **U0（A 协调）已交付：** [chat-events.ts](src/contracts/chat-events.ts) / [chat-service.ts](src/contracts/chat-service.ts) / [CHAT_STATE_TABLE](docs/CHAT_STATE_TABLE.md) / 18 个契约测试落到 `contract_version = 0.3.0` 上的加法（无 breaking）。B 可读状态表出 U1 视觉稿；C 在 U2 实现 `LocalChatAdapter`，配合本轮契约测试；Q 在 U3 用 Playwright 跑端到端。完整交接见 [A 的 U0 handoff](handoffs/A/2026-09-18_imm-u0-stream-interfaces.md)。
 

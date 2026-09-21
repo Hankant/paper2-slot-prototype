@@ -15,6 +15,7 @@ import {
   type TrialFeedback,
 } from '@contracts';
 import { evaluateAdvice } from '../../domain/advice-evaluation.js';
+import { randomId } from '../../uuid.js';
 
 export const PREVIEW_TRIAL_ID = 'preview-trial-1';
 const machines = [
@@ -69,7 +70,7 @@ export function createOneTrialPreview(
 ): ExperimentAdapter & { exportEvents(): EventEnvelope[] } {
   const seed = options.seedSession ?? {};
   const defaults: Session = {
-    session_id: crypto.randomUUID(),
+    session_id: randomId(),
     participant_id: 'virtual-preview',
     recruitment_batch: 'preview',
     group_assignment: 'simulation',
@@ -143,16 +144,44 @@ export function createOneTrialPreview(
     };
   }
   function checkEvent(event: EventEnvelope): void {
-    if (
-      completed ||
-      [...entryRequired, ...order].filter(
-        (type) => !(selfWithoutAdvice() && type === 'advice_revealed'),
-      )[events.length] !== event.event_type ||
-      event.sequence_no !== events.length
-    ) {
+    if (completed || event.sequence_no !== events.length) {
       fail('事件顺序或序号错误');
     }
-    const expectedPhase = event.event_type === 'consent_recorded' ? 'consent' : 'main';
+    const existingQuestionnaires = events.filter(
+      (saved) => saved.event_type === 'questionnaire_block_submitted',
+    );
+    if (event.event_type === 'questionnaire_block_submitted') {
+      if (
+        existingQuestionnaires.some(
+          (saved) =>
+            saved.event_type === 'questionnaire_block_submitted' &&
+            saved.payload.block_id === event.payload.block_id,
+        )
+      )
+        fail('问卷区块重复', 'INVALID_EVENT');
+      if (event.payload.position === 'pre') {
+        if (has('prediction_submitted')) fail('前测必须在主任务前完成');
+        if (options.requireConsentVersion && !has('consent_recorded')) fail('请先确认参与说明');
+      } else if (!has('feedback_presented') || has('session_completion_requested')) {
+        fail('后测必须在结果呈现后、完成请求前提交');
+      }
+    } else {
+      const coreEvents = events.filter(
+        (saved) => saved.event_type !== 'questionnaire_block_submitted',
+      );
+      const expected = [...entryRequired, ...order].filter(
+        (type) => !(selfWithoutAdvice() && type === 'advice_revealed'),
+      )[coreEvents.length];
+      if (expected !== event.event_type) fail('事件顺序或序号错误');
+    }
+    const expectedPhase =
+      event.event_type === 'consent_recorded'
+        ? 'consent'
+        : event.event_type === 'questionnaire_block_submitted'
+          ? event.payload.position === 'pre'
+            ? 'profile'
+            : 'finalizing'
+          : 'main';
     if (event.phase !== expectedPhase) fail('事件阶段不匹配', 'INVALID_EVENT');
     if (
       event.event_type === 'consent_recorded' &&

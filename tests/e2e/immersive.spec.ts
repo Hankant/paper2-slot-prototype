@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
+import { completePostQuestionnaires, completePreQuestionnaires } from '../helpers/questionnaire.js';
 
 async function completeEntry(page: Page, width?: number): Promise<void> {
   await expect(page.getByRole('heading', { name: '预测任务参与知情同意书' })).toBeVisible();
@@ -21,6 +22,7 @@ async function completeEntry(page: Page, width?: number): Promise<void> {
       fullPage: true,
     });
   await page.getByRole('button', { name: /开始实验/ }).click();
+  await completePreQuestionnaires(page);
 }
 
 for (const width of [1280, 390]) {
@@ -89,6 +91,7 @@ for (const width of [1280, 390]) {
     await expect(page.locator('.spinning')).toHaveCount(3);
     await expect(page.locator('.result-card')).toBeHidden();
     await expect(page.locator('.result-card')).toContainText('机器 C 中奖');
+    await completePostQuestionnaires(page);
     await expect(page.locator('.spinning')).toHaveCount(0);
     await expect(page.locator('.result-score')).toContainText('+0');
     await expect(page.locator('.winner')).toHaveAttribute('data-machine', 'C');
@@ -97,7 +100,7 @@ for (const width of [1280, 390]) {
     const file = await (await download).path();
     if (!file) throw new Error('download missing');
     const data = JSON.parse(await readFile(file, 'utf8'));
-    expect(data.events).toHaveLength(8);
+    expect(data.events).toHaveLength(14);
     expect(data.events[0]).toMatchObject({
       event_type: 'consent_recorded',
       phase: 'consent',
@@ -136,6 +139,7 @@ test('atelier 360: self branch, no advice, actual winner scoring', async ({ page
   await page.getByRole('button', { name: '选择机器 C', exact: true }).click();
   await page.getByRole('button', { name: '锁定最终预测 →', exact: true }).click();
   await page.getByRole('button', { name: '拉杆开奖', exact: true }).click();
+  await completePostQuestionnaires(page);
   await expect(page.locator('.result-score')).toContainText('+10');
   const download = page.waitForEvent('download');
   await page.getByRole('button', { name: '下载本轮记录 ↓', exact: true }).click();
@@ -147,7 +151,7 @@ test('atelier 360: self branch, no advice, actual winner scoring', async ({ page
     advice_exposed: false,
     final_matches_advice: null,
   });
-  expect(data.events).toHaveLength(7);
+  expect(data.events).toHaveLength(13);
   await expect(page.locator('.experience-error')).toBeEmpty();
 });
 

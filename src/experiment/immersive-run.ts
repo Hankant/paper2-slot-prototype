@@ -14,7 +14,9 @@ import {
   type TrialFeedback,
   type ChatRequest,
   type EventEnvelope,
+  type EventPayloadMap,
 } from '@contracts';
+import { randomId } from '../uuid.js';
 
 export type RunStage =
   'prediction' | 'source' | 'chat' | 'final' | 'ready' | 'spinning' | 'feedback';
@@ -44,6 +46,8 @@ export interface RunHooks {
   readonly onReceipt?: (receipt: SaveReceipt) => void;
   /** Persist locally as soon as the record is created, before network work. */
   readonly onAudit?: (record: AuditRecord) => void;
+  /** Collect and persist post-task measures before requesting completion. */
+  readonly beforeCompletion?: () => Promise<void>;
 }
 
 const PREVIEW_CREDENTIAL: EntryCredential = {
@@ -108,7 +112,10 @@ export class ImmersiveRun {
       .filter((e) => e.session_id === this.session.session_id)
       .sort((a, b) => a.sequence_no - b.sequence_no);
     for (const event of confirmed) {
-      this.records.set(event.event_type, { event, confirmed: true });
+      this.records.set(this.eventKey(event.event_type, event.payload), {
+        event,
+        confirmed: true,
+      });
       this.sequence = Math.max(this.sequence, event.sequence_no + 1);
     }
     if (confirmed.length === 0) return;
@@ -183,7 +190,7 @@ export class ImmersiveRun {
   note(type: string, data: unknown = null): void {
     const record = {
       // New presentation gets a new ID; retries reuse the queued record.
-      id: crypto.randomUUID(),
+      id: randomId(),
       type,
       at_ms: Math.round(performance.now()),
       data,
@@ -195,6 +202,18 @@ export class ImmersiveRun {
     this.stage = stage;
     this.clock = performance.now();
   }
+  private eventKey(type: string, payload?: unknown): string {
+    if (type === 'questionnaire_block_submitted') {
+      const blockId = (payload as { block_id?: unknown } | null)?.block_id;
+      if (typeof blockId !== 'string' || blockId.length === 0)
+        throw new Error('问卷区块缺少 block_id');
+      return `${type}:${blockId}`;
+    }
+    return type;
+  }
+  hasQuestionnaireBlock(blockId: string): boolean {
+    return this.records.get(`questionnaire_block_submitted:${blockId}`)?.confirmed === true;
+  }
   private selection(id: string): {
     machine_id: string;
     display_position: 'left' | 'center' | 'right';
@@ -204,7 +223,8 @@ export class ImmersiveRun {
     return { machine_id: id, display_position: machine.display_position };
   }
   private async save(type: string, payload: unknown, timestamp?: string): Promise<void> {
-    let record = this.records.get(type);
+    const key = this.eventKey(type, payload);
+    let record = this.records.get(key);
     if (record?.confirmed) return;
     if (!record) {
       record = {
@@ -217,19 +237,30 @@ export class ImmersiveRun {
           protocol_version: this.session.protocol_version,
           session_id: this.session.session_id,
           participant_id: this.session.participant_id,
-          event_id: crypto.randomUUID(),
+          event_id: randomId(),
           sequence_no: this.sequence,
-          phase: type === 'consent_recorded' ? 'consent' : 'main',
+          phase:
+            type === 'consent_recorded'
+              ? 'consent'
+              : type === 'questionnaire_block_submitted'
+                ? (payload as EventPayloadMap['questionnaire_block_submitted']).position === 'pre'
+                  ? 'profile'
+                  : 'finalizing'
+                : 'main',
           event_type: type,
           client_timestamp: timestamp ?? new Date().toISOString(),
           elapsed_ms: Math.round(performance.now() - this.clock),
-          ...(['session_completion_requested', 'consent_recorded'].includes(type)
+          ...([
+            'session_completion_requested',
+            'consent_recorded',
+            'questionnaire_block_submitted',
+          ].includes(type)
             ? {}
             : { trial_id: this.trialId }),
           payload,
         }),
       };
-      this.records.set(type, record);
+      this.records.set(key, record);
     }
     const receipt = saveReceiptSchema.parse(
       await this.adapter.resultStore.saveEvents(this.session, [record.event]),
@@ -239,6 +270,11 @@ export class ImmersiveRun {
     record.confirmed = true;
     this.sequence += 1;
     this.hooks.onReceipt?.(receipt);
+  }
+  async submitQuestionnaireBlock(
+    payload: EventPayloadMap['questionnaire_block_submitted'],
+  ): Promise<void> {
+    await this.save('questionnaire_block_submitted', payload);
   }
   async predict(id: string, confidence: number): Promise<void> {
     if (this.stage !== 'prediction') throw new Error('独立预测已经锁定');
@@ -321,6 +357,7 @@ export class ImmersiveRun {
     this.feedback ??= result;
     this.move('feedback');
     await this.save('feedback_presented', { presented_at_ms: Math.round(performance.now()) });
+    await this.hooks.beforeCompletion?.();
     await this.save('session_completion_requested', { ack_required_event_count: this.sequence });
     // Mandatory records are durable; pending audit must be flushed BEFORE finish.
     if (this.hooks.flushAudit) await this.hooks.flushAudit([...this.audit]);

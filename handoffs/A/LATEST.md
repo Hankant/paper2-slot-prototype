@@ -1,3 +1,7 @@
+2026-09-21 当前工作：[前测/后测问卷模块](2026-09-21-questionnaire-module.md)，VERIFIED：143 项单测、6 项预览浏览器测试、5 项 SQLite 收集测试、4 项 loopback 与 2 项校园裸 HTTP 回归通过。问卷题目集中在 `src/domain/questionnaire-instrument-demo.ts`。
+
+同日基础修复：[校园网 HTTP 兼容修复](2026-09-21-campus-http.md)。
+
 # A 当前交付：服务器采集试点
 
 2026-09-19 / VERIFIED_LOCAL_PILOT。最新 [验收交接](2026-09-19-collection-final.md) 与 [运行说明](../../docs/COLLECTION_PILOT.md)。Kimi/多 agent 已按用户要求停止，后续由 Codex 直接推进。

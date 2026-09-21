@@ -18,7 +18,7 @@
 | `deploy/Caddyfile`              | HTTPS 反向代理，`DOMAIN` 环境变量注入，自动申请/续期证书                                                                                                          |
 | `docs/COLLECTION_DEPLOYMENT.md` | 本手册                                                                                                                                                            |
 
-`npm run build:all` 已提供，产出 `dist/` 与 `dist-server/main.js`。本机 Node 服务验收通过；Docker 引擎未启动，当前只核验 Compose 配置，尚未构建/运行容器或验证公网 HTTPS。
+`npm run build:all` 已提供，产出 `dist/` 与 `dist-server/main.js`。本机 Node 服务验收通过。2026-09-20 补充验证（Docker 28.0.4）：镜像 `paper2-collection:local` 构建成功；容器运行后 `/api/health` 与 `collect.html` 正常；API 建会话并 `docker restart` 后会话从持久卷恢复；`docker compose config` 通过。**Caddy 公网 HTTPS 与证书申请仍未实测**，云端步骤以实际执行为准。
 
 ## 2. 密钥与配置管理（先读）
 

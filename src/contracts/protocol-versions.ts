@@ -14,10 +14,10 @@
  * reserved for breaking interface changes.
  */
 
-export const CONTRACT_VERSION = '0.3.0' as const;
+export const CONTRACT_VERSION = '0.4.0' as const;
 export const SCHEMA_VERSION = '0.3.0' as const;
 export const PROTOCOL_VERSION = 'unreleased' as const;
-export const CLIENT_VERSION = '0.3.0' as const;
+export const CLIENT_VERSION = '0.4.0' as const;
 
 export type SemverTag = `${number}.${number}.${number}` | `${number}.${number}.${number}-${string}`;
 

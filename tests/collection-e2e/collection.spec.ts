@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { completePostQuestionnaires, completePreQuestionnaires } from '../helpers/questionnaire.js';
 async function enter(page: Page) {
   await page.goto('/collect.html');
   await page.getByLabel('参与码', { exact: true }).fill('PAPER2-TEST');
@@ -8,6 +9,7 @@ async function enter(page: Page) {
   for (let i = 0; i < (await checks.count()); i++) await checks.nth(i).check();
   await page.getByRole('button', { name: /同意并查看操作说明/ }).click();
   await page.getByRole('button', { name: /开始实验/ }).click();
+  await completePreQuestionnaires(page);
   await expect(page.getByRole('button', { name: '选择机器 A', exact: true })).toBeVisible();
 }
 async function predict(page: Page) {
@@ -19,6 +21,7 @@ async function finalize(page: Page, id: string) {
   await page.getByRole('button', { name: `选择机器 ${id}`, exact: true }).click();
   await page.getByRole('button', { name: /锁定最终预测/ }).click();
   await page.getByRole('button', { name: '拉杆开奖', exact: true }).click();
+  await completePostQuestionnaires(page);
 }
 for (const width of [1280, 390])
   test(`self branch durable export and completed reload ${width}`, async ({ page }) => {
@@ -34,7 +37,7 @@ for (const width of [1280, 390])
     await expect(page.locator('#step-label')).toHaveText('本轮完成');
     const before = await (await page.request.get('/api/export')).json();
     expect(before.completed).toBe(true);
-    expect(before.events).toHaveLength(7);
+    expect(before.events).toHaveLength(13);
     expect(before.feedback.final_correct).toBe(true);
     expect(before.feedback.advice_evaluation.advice_exposed).toBe(false);
     expect(before.entry).not.toHaveProperty('entry_code');
@@ -79,7 +82,10 @@ test('lost write acknowledgement then reload retries original event IDs, without
   expect(
     data.events.filter((e: { event_type: string }) => e.event_type === 'prediction_submitted'),
   ).toHaveLength(1);
-  expect(data.events[1].payload.machine_id).toBe('A');
+  expect(
+    data.events.find((event: { event_type: string }) => event.event_type === 'prediction_submitted')
+      .payload.machine_id,
+  ).toBe('A');
 });
 test('AI reload before advice, streamed answer, failed finish stays pending and retries', async ({
   page,
@@ -112,7 +118,7 @@ test('AI reload before advice, streamed answer, failed finish stays pending and 
   await expect(page.locator('#step-label')).toHaveText('本轮完成');
   const data = await (await page.request.get('/api/export')).json();
   expect(data.completed).toBe(true);
-  expect(data.events).toHaveLength(8);
+  expect(data.events).toHaveLength(14);
   expect(
     data.presentation_audit.some((a: { type: string }) => a.type === 'chat_display_completed'),
   ).toBe(true);

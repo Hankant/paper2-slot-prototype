@@ -3,6 +3,7 @@ import { readChatStream } from '../../experiment/chat-stream-reader.js';
 import { type ImmersiveRun } from '../../experiment/immersive-run.js';
 import { STANDARD_QUESTION, FOLLOWUP_QUESTION } from '../../domain/chat-materials.js';
 import { arrow, spark } from './symbols.js';
+import { randomId } from '../../uuid.js';
 import { requireElement } from './dom.js';
 
 interface Message {
@@ -133,7 +134,7 @@ export class ChatPanel {
       session_id: this.run.session.session_id,
       trial_id: this.run.trialId,
       advice_id: this.run.advice.advice_id,
-      request_id: crypto.randomUUID(),
+      request_id: randomId(),
       user_text: text,
       user_text_chars: text.length,
       source_choice: 'ai',

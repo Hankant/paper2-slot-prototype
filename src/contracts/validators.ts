@@ -114,6 +114,23 @@ const payloadSchemas: Readonly<Record<z.infer<typeof eventType>, z.ZodTypeAny | 
     element_id: z.string().min(1),
     visible: z.boolean(),
   }),
+  questionnaire_block_submitted: z.object({
+    block_id: z.string().min(1),
+    instrument_version: z.string().min(1),
+    wording_profile: z.enum(['SELF_AI', 'HUMAN_AI']),
+    position: z.enum(['pre', 'post']),
+    item_order: z.array(z.string().min(1)).min(1),
+    responses: z
+      .array(
+        z.object({
+          item_id: z.string().min(1),
+          value: z.union([z.string(), z.number(), z.array(z.string())]).nullable(),
+          skipped: z.boolean(),
+          response_ms: z.number().int().nonnegative(),
+        }),
+      )
+      .min(1),
+  }),
   session_completion_requested: z.object({
     ack_required_event_count: z.number().int().nonnegative(),
   }),
