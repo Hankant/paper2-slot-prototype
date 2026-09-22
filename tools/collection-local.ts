@@ -14,7 +14,16 @@ if (!existsSync(settingsFile)) {
   writeFileSync(
     settingsFile,
     JSON.stringify(
-      { entryCode: 'PAPER2-LOCAL', adminToken: randomBytes(32).toString('hex'), port: 5200 },
+      {
+        entryCode: 'PAPER2-LOCAL',
+        adminToken: randomBytes(32).toString('hex'),
+        port: 5200,
+        humanAverageHitRate: 0.55,
+        aiHitRate: 0.6,
+        aiAccuracyTier: 'plus_5pp',
+        pointsPerCorrect: 10,
+        rewardPerPointCny: null,
+      },
       null,
       2,
     ),
@@ -25,6 +34,11 @@ const settings = JSON.parse(readFileSync(settingsFile, 'utf8')) as {
   entryCode: string;
   adminToken: string;
   port: number;
+  humanAverageHitRate?: number;
+  aiHitRate?: number;
+  aiAccuracyTier?: string;
+  pointsPerCorrect?: number;
+  rewardPerPointCny?: number | null;
 };
 const databasePath = path.join(privateDir, 'collection.sqlite');
 const baseUrl = `http://127.0.0.1:${settings.port}`;
@@ -39,6 +53,14 @@ if (action === 'start') {
     STATIC_DIR: path.resolve('dist'),
     SECURE_COOKIES: 'false',
     NODE_ENV: 'development',
+    HUMAN_AVERAGE_HIT_RATE: String(settings.humanAverageHitRate ?? 0.55),
+    AI_HIT_RATE: String(settings.aiHitRate ?? 0.6),
+    AI_ACCURACY_TIER: settings.aiAccuracyTier ?? 'plus_5pp',
+    POINTS_PER_CORRECT: String(settings.pointsPerCorrect ?? 10),
+    REWARD_PER_POINT_CNY:
+      settings.rewardPerPointCny === null || settings.rewardPerPointCny === undefined
+        ? ''
+        : String(settings.rewardPerPointCny),
   });
   process.stdout.write(
     `本机采集试点：${baseUrl}/collect.html\n参与码保存在 private/collection/local-settings.json；首次默认 PAPER2-LOCAL。\n`,

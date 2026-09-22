@@ -71,6 +71,7 @@ export type ExperimentPhase =
 
 export const EXPERIMENT_EVENT_TYPES = [
   'consent_recorded',
+  'practice_completed',
   'profile_submitted',
   'comprehension_answered',
   'prediction_submitted',
@@ -99,6 +100,7 @@ export const TRIAL_LEVEL_EVENTS: ReadonlyArray<ExperimentEventType> = [
 /** Events that must NOT carry a trial_id. */
 export const ENTRY_LEVEL_EVENTS: ReadonlyArray<ExperimentEventType> = [
   'consent_recorded',
+  'practice_completed',
   'profile_submitted',
   'questionnaire_block_submitted',
   'session_completion_requested',
@@ -117,6 +119,24 @@ export type EnvelopeWithTrial = EventEnvelopeBase & { readonly trial_id: string 
 /** Typed public payloads; the runtime validator mirrors this map. */
 export interface EventPayloadMap {
   consent_recorded: { version: string };
+  practice_completed: {
+    practice_version: string;
+    condition_id: string;
+    human_average_hit_rate: number;
+    ai_hit_rate: number;
+    ai_accuracy_tier: string;
+    points_per_correct: number;
+    reward_per_point_cny: number | null;
+    trials: Array<{
+      practice_trial_id: string;
+      predicted_machine_id: string;
+      actual_winner_machine_id: string;
+      correct: boolean;
+      points_awarded: number;
+      response_ms: number;
+    }>;
+    total_points: number;
+  };
   profile_submitted: { fields: Record<string, unknown> };
   comprehension_answered: { question_id: string; answer: unknown; correct: boolean | null };
   prediction_submitted: { machine_id: string; display_position: 'left' | 'center' | 'right' };
@@ -155,6 +175,7 @@ type RequiredTrialEvent =
   | 'feedback_presented';
 type EntryEvent =
   | 'consent_recorded'
+  | 'practice_completed'
   | 'profile_submitted'
   | 'questionnaire_block_submitted'
   | 'session_completion_requested';

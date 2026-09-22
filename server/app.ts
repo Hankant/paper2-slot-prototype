@@ -31,7 +31,10 @@ import {
   type EventEnvelope,
   type SaveReceipt,
   type Session,
+  type PerformanceReference,
+  type TrialFeedback,
 } from '@contracts';
+import { evaluateAdvice } from '../src/domain/advice-evaluation.js';
 import {
   createOneTrialPreview,
   PREVIEW_TRIAL_ID,
@@ -43,6 +46,8 @@ export interface CollectionServerOptions {
   adminToken: string;
   staticDir?: string;
   secureCookies?: boolean;
+  performanceReference?: PerformanceReference;
+  practiceRequired?: boolean;
 }
 
 export interface CollectionServer {
@@ -144,6 +149,15 @@ export function createCollectionServer(options: CollectionServerOptions): Collec
     throw new Error('adminToken is required (no baked-in default credentials)');
   }
   const secureCookies = options.secureCookies === true;
+  const performanceReference: PerformanceReference = options.performanceReference ?? {
+    condition_id: 'human-55_ai-plus5',
+    human_average_hit_rate: 0.55,
+    ai_hit_rate: 0.6,
+    ai_accuracy_tier: 'plus_5pp',
+    points_per_correct: 10,
+    reward_per_point_cny: null,
+  };
+  const practiceRequired = options.practiceRequired === true;
   const staticRoot = options.staticDir ? path.resolve(options.staticDir) : null;
 
   const db = new DatabaseSync(options.databasePath);
@@ -223,6 +237,8 @@ export function createCollectionServer(options: CollectionServerOptions): Collec
     const adapter = createOneTrialPreview({
       adviceForSelf: false,
       requireConsentVersion: row.consent_version,
+      requirePractice: practiceRequired,
+      performanceReference,
       seedSession: session,
     });
     const credential: EntryCredential = {
@@ -474,15 +490,54 @@ export function createCollectionServer(options: CollectionServerOptions): Collec
   }
 
   async function exportShape(row: SessionRow) {
-    const liveSession = await loadLive(row);
-    const events = liveSession.adapter.exportEvents();
+    const storedSession = JSON.parse(row.session_json) as Session;
+    const storedRows = stmtListEvents.all(row.session_id) as { body: string }[];
+    const storedEvents = storedRows.map((record) => JSON.parse(record.body) as EventEnvelope);
+    const isCurrentContract = storedSession.contract_version === CONTRACT_VERSION;
+    const liveSession = isCurrentContract ? await loadLive(row) : null;
+    const session = liveSession?.session ?? storedSession;
+    const events = liveSession?.adapter.exportEvents() ?? storedEvents;
     const hasFinal = events.some((event) => event.event_type === 'final_prediction_submitted');
-    const feedback = hasFinal
-      ? await liveSession.adapter.trialService.getFeedback(liveSession.session, PREVIEW_TRIAL_ID)
-      : null;
+    let feedback: TrialFeedback | null = null;
+    if (hasFinal && liveSession) {
+      feedback = await liveSession.adapter.trialService.getFeedback(
+        liveSession.session,
+        PREVIEW_TRIAL_ID,
+      );
+    } else if (hasFinal) {
+      const independent = events.find((event) => event.event_type === 'prediction_submitted');
+      const final = events.find((event) => event.event_type === 'final_prediction_submitted');
+      if (
+        independent?.event_type === 'prediction_submitted' &&
+        final?.event_type === 'final_prediction_submitted'
+      ) {
+        const winner = 'C';
+        const exposed = events.some((event) => event.event_type === 'advice_revealed');
+        const evaluation = evaluateAdvice({
+          exposed,
+          target: 'B',
+          winner,
+          independent: independent.payload.machine_id,
+          final: final.payload.machine_id,
+        });
+        feedback = {
+          trial_id: PREVIEW_TRIAL_ID,
+          actual_winner_machine_id: winner,
+          participant_predicted_winner: final.payload.machine_id === winner,
+          advice_target_hit: null,
+          advice_actual_hit: evaluation.advice_correct,
+          advice_evaluation: evaluation,
+          points_awarded: final.payload.machine_id === winner ? 10 : 0,
+          scoring_version: '0.3.1',
+          independent_correct: independent.payload.machine_id === winner,
+          final_correct: final.payload.machine_id === winner,
+          required_event_types: [],
+        };
+      }
+    }
     const auditRows = stmtListAudit.all(row.session_id) as { body: string }[];
     return {
-      session: liveSession.session,
+      session,
       events,
       entry: JSON.parse(row.entry_json) as EntryAck,
       completed: row.completed === 1,
@@ -542,6 +597,8 @@ export function createCollectionServer(options: CollectionServerOptions): Collec
       const adapter = createOneTrialPreview({
         adviceForSelf: false,
         requireConsentVersion: entry.consent_version,
+        requirePractice: practiceRequired,
+        performanceReference,
         seedSession: {
           participant_id: randomUUID(),
           recruitment_batch: 'collection-pilot',
@@ -873,6 +930,10 @@ export function createCollectionServer(options: CollectionServerOptions): Collec
         'participation_mode',
         'device_class',
         'recruitment_batch',
+        'condition_id',
+        'human_average_hit_rate',
+        'ai_hit_rate',
+        'ai_accuracy_tier',
         'consent_version',
         'event_count',
         'audit_count',
@@ -883,6 +944,10 @@ export function createCollectionServer(options: CollectionServerOptions): Collec
         'independent_correct',
         'final_correct',
         'points_awarded',
+        'practice_points',
+        'total_points',
+        'reward_per_point_cny',
+        'calculated_reward_cny',
         'created_at',
         'source_choice',
         'confidence_percent',
@@ -899,7 +964,16 @@ export function createCollectionServer(options: CollectionServerOptions): Collec
         const final = shape.events.find((e) => e.event_type === 'final_prediction_submitted');
         const source = shape.events.find((e) => e.event_type === 'source_selected');
         const confidence = shape.events.find((e) => e.event_type === 'confidence_submitted');
+        const practice = shape.events.find((e) => e.event_type === 'practice_completed');
         const evaluation = shape.feedback?.advice_evaluation;
+        const assigned = shape.session.condition_assignment ?? performanceReference;
+        const practicePoints =
+          practice?.event_type === 'practice_completed' ? practice.payload.total_points : 0;
+        const mainPoints = shape.feedback?.points_awarded ?? 0;
+        const rewardRate =
+          practice?.event_type === 'practice_completed'
+            ? practice.payload.reward_per_point_cny
+            : performanceReference.reward_per_point_cny;
         lines.push(
           [
             csvCell(shape.session.session_id),
@@ -907,6 +981,10 @@ export function createCollectionServer(options: CollectionServerOptions): Collec
             csvCell(shape.session.metadata.participation_mode),
             csvCell(shape.session.metadata.device_class),
             csvCell(shape.session.recruitment_batch),
+            csvCell(shape.session.group_assignment),
+            csvCell(assigned.human_average_hit_rate),
+            csvCell(assigned.ai_hit_rate),
+            csvCell(assigned.ai_accuracy_tier),
             csvCell(shape.entry.consent_version),
             csvCell(shape.events.length),
             csvCell(shape.presentation_audit.length),
@@ -917,6 +995,10 @@ export function createCollectionServer(options: CollectionServerOptions): Collec
             csvCell(shape.feedback ? shape.feedback.independent_correct : ''),
             csvCell(shape.feedback ? shape.feedback.final_correct : ''),
             csvCell(shape.feedback ? shape.feedback.points_awarded : ''),
+            csvCell(practicePoints),
+            csvCell(practicePoints + mainPoints),
+            csvCell(rewardRate),
+            csvCell(rewardRate === null ? '' : (practicePoints + mainPoints) * rewardRate),
             csvCell(
               shape.session
                 ? (rows.find((r) => r.session_id === shape.session.session_id)?.created_at ?? '')

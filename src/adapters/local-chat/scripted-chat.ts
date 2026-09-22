@@ -67,8 +67,8 @@ export function createScriptedChat(
           request.user_text === STANDARD_QUESTION
             ? `我的建议是机器 ${advice.advice_target_machine_id}。\n\n${advice.copy}\n\n你可以保留自己的判断，也可以调整最终预测。`
             : request.user_text === FOLLOWUP_QUESTION
-              ? '这条建议是一个可供参考的预测，并不保证本轮中奖。请根据你的判断确认最终答案。\n\n本演示使用预先编写的材料，没有调用真实模型。'
-              : '当前是固定材料演示，暂不支持自由问答。你可以点击下方的标准问题，查看本轮建议或了解如何使用建议。';
+              ? '这条建议是一个可供参考的预测，并不保证本轮中奖。请结合已有信息，根据你的判断确认最终答案。'
+              : '当前对话聚焦于本轮预测。你可以点击下方的标准问题，查看本轮建议或了解如何使用建议。';
         const chars = Array.from(answer);
         const chunks: string[] = [];
         for (let i = 0; i < chars.length; i += 2) chunks.push(chars.slice(i, i + 2).join(''));

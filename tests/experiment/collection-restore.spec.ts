@@ -55,6 +55,14 @@ const TRIAL: PublicTrial = {
   ],
   advice_timing: 'after_choice',
   material_version: '0.3.0',
+  performance_reference: {
+    condition_id: 'test-condition',
+    human_average_hit_rate: 0.55,
+    ai_hit_rate: 0.6,
+    ai_accuracy_tier: 'plus_5pp',
+    points_per_correct: 10,
+    reward_per_point_cny: null,
+  },
   advice: { advice_id: 'advice-1', revealed: false },
 };
 

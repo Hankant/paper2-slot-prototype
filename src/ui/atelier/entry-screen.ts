@@ -89,7 +89,7 @@ export function mountEntry(
       'consent',
       `<div class="entry-layout"><aside class="entry-overview"><p class="eyebrow">开始之前 / WELCOME</p><h1 tabindex="-1">欢迎参加<br>预测实验。</h1><p class="entry-lead">观察历史信息，做出你的判断。<br>开始前，请先了解参与内容。</p>
       <div class="entry-illustration" aria-hidden="true"><span>PREDICTION LAB / 01</span><div>${['cherry', 'lemon', 'bell'].map((s) => `<i>${symbol(s)}</i>`).join('')}</div><b>观察 · 判断 · 选择</b></div>
-      <dl class="entry-facts"><div><dt>本次内容</dt><dd>1 轮模拟预测</dd></div><div><dt>参与设备</dt><dd>手机或电脑浏览器</dd></div><div><dt>开始方式</dt><dd>阅读并自愿确认</dd></div></dl>
+      <dl class="entry-facts"><div><dt>本次内容</dt><dd>试玩与预测任务</dd></div><div><dt>参与设备</dt><dd>手机或电脑浏览器</dd></div><div><dt>开始方式</dt><dd>阅读并自愿确认</dd></div></dl>
       <p class="entry-side-note">请在方便、安静的环境中操作。你可以按自己的节奏阅读，也可以选择不参加。</p></aside>
       <section class="consent-card" aria-labelledby="consent-title"><div class="entry-card-heading"><span class="eyebrow">PARTICIPATION INFORMATION</span><span class="draft-pill">演示草稿</span></div><h2 id="consent-title">${material.title}</h2>
       <div class="consent-sections">${material.sections.map((s, i) => `<section><h3><span>${String(i + 1).padStart(2, '0')}</span>${s.title}</h3><p>${s.text}</p></section>`).join('')}</div>

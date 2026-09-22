@@ -51,6 +51,42 @@ async function* rawStream(events: unknown[]) {
 }
 
 describe('usable runtime services for the immersive preview', () => {
+  it('requires, records and validates the backend-assigned practice condition', async () => {
+    const performanceReference = {
+      condition_id: 'human-55_ai-plus5',
+      human_average_hit_rate: 0.55,
+      ai_hit_rate: 0.6,
+      ai_accuracy_tier: 'plus_5pp',
+      points_per_correct: 20,
+      reward_per_point_cny: 0.01,
+    } as const;
+    const adapter = createOneTrialPreview({
+      adviceForSelf: false,
+      requirePractice: true,
+      performanceReference,
+    });
+    const run = new ImmersiveRun(adapter, PREVIEW_TRIAL_ID);
+    await run.initialize();
+    await run.submitPractice({
+      practice_version: 'slot-practice-0.1.0',
+      ...performanceReference,
+      trials: [
+        {
+          practice_trial_id: 'practice-01',
+          predicted_machine_id: 'A',
+          actual_winner_machine_id: 'A',
+          correct: true,
+          points_awarded: 20,
+          response_ms: 500,
+        },
+      ],
+      total_points: 20,
+    });
+    expect(run.hasPractice()).toBe(true);
+    expect(run.practicePoints).toBe(20);
+    await run.predict('A', 50);
+  });
+
   it('persists distinct pre/post questionnaire blocks before session completion', async () => {
     const adapter = createOneTrialPreview({ adviceForSelf: false });
     const run = new ImmersiveRun(adapter, PREVIEW_TRIAL_ID, {

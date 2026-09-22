@@ -9,6 +9,7 @@
 
 import type { SemverTag } from './protocol-versions.js';
 import type { ExperimentPhase, ParticipationMode, SessionMetadata } from './envelopes.js';
+import type { PerformanceReference } from './trial-types.js';
 
 export interface Session {
   readonly session_id: string;
@@ -21,6 +22,7 @@ export interface Session {
   readonly contract_version: SemverTag;
   readonly adapter_version: string;
   readonly provider: string;
+  readonly condition_assignment?: PerformanceReference;
   readonly metadata: SessionMetadata;
 }
 

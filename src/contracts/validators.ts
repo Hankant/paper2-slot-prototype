@@ -78,6 +78,30 @@ const payloadSchemas: Readonly<Record<z.infer<typeof eventType>, z.ZodTypeAny | 
   consent_recorded: z.object({
     version: z.string().min(1),
   }),
+  practice_completed: z
+    .object({
+      practice_version: z.string().min(1),
+      condition_id: z.string().min(1),
+      human_average_hit_rate: z.number().min(0).max(1),
+      ai_hit_rate: z.number().min(0).max(1),
+      ai_accuracy_tier: z.string().min(1),
+      points_per_correct: z.number().int().min(0),
+      reward_per_point_cny: z.number().min(0).nullable(),
+      trials: z
+        .array(
+          z.object({
+            practice_trial_id: z.string().min(1),
+            predicted_machine_id: z.string().min(1),
+            actual_winner_machine_id: z.string().min(1),
+            correct: z.boolean(),
+            points_awarded: z.number().int().min(0),
+            response_ms: z.number().int().nonnegative(),
+          }),
+        )
+        .min(1),
+      total_points: z.number().int().min(0),
+    })
+    .strict(),
   profile_submitted: z.object({
     fields: z.record(z.string(), z.unknown()),
   }),
@@ -197,6 +221,16 @@ export const publicTrialSchema = z
     advice_timing: z.enum(['before_choice', 'after_choice', 'none']),
     advice: publicAdviceBlockSchema.optional(),
     material_version: semverTag,
+    performance_reference: z
+      .object({
+        condition_id: z.string().min(1),
+        human_average_hit_rate: z.number().min(0).max(1),
+        ai_hit_rate: z.number().min(0).max(1),
+        ai_accuracy_tier: z.string().min(1),
+        points_per_correct: z.number().int().min(0),
+        reward_per_point_cny: z.number().min(0).nullable(),
+      })
+      .strict(),
   })
   .superRefine((value, ctx) => {
     if (!uniqueBy(value.machines, (m) => m.machine_id)) {
@@ -325,6 +359,17 @@ export const sessionSchema = z.object({
   contract_version: semverTag,
   adapter_version: z.string().min(1),
   provider: z.string().min(1),
+  condition_assignment: z
+    .object({
+      condition_id: z.string().min(1),
+      human_average_hit_rate: z.number().min(0).max(1),
+      ai_hit_rate: z.number().min(0).max(1),
+      ai_accuracy_tier: z.string().min(1),
+      points_per_correct: z.number().int().min(0),
+      reward_per_point_cny: z.number().min(0).nullable(),
+    })
+    .strict()
+    .optional(),
   metadata: sessionMetadataSchema,
 });
 

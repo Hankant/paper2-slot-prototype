@@ -53,6 +53,7 @@ describe('contracts: publicTrial', () => {
       'advice_timing',
       'advice',
       'material_version',
+      'performance_reference',
     ];
     expect(Object.keys(parsed).sort()).toEqual([...allowedKeys].sort());
   });

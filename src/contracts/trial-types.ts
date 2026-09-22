@@ -69,6 +69,20 @@ export interface PublicTrial {
   /** Hidden metadata only before reveal, or omitted; never preload the advice content. */
   readonly advice?: PublicAdviceBlock;
   readonly material_version: SemverTag;
+  /** Server-assigned source-performance and incentive condition shown in the study. */
+  readonly performance_reference: PerformanceReference;
+}
+
+export interface PerformanceReference {
+  readonly condition_id: string;
+  /** Pilot-sample mean human accuracy for this task, not this participant's accuracy. */
+  readonly human_average_hit_rate: number;
+  /** Experimentally assigned AI accuracy displayed to the participant. */
+  readonly ai_hit_rate: number;
+  readonly ai_accuracy_tier: string;
+  readonly points_per_correct: number;
+  /** Null until the research team supplies an approved cash conversion rate. */
+  readonly reward_per_point_cny: number | null;
 }
 
 export interface SlotMachineHistoryEntry {

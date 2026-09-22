@@ -9,6 +9,7 @@ import { mountEntry } from './ui/atelier/entry-screen.js';
 import { ENTRY_MATERIAL } from './domain/entry-materials.js';
 import { QUESTIONNAIRE_INSTRUMENT } from './domain/questionnaire-instrument-demo.js';
 import { mountQuestionnaireSequence } from './ui/questionnaire-overlay.js';
+import { mountPractice } from './ui/practice-overlay.js';
 import { requireElement } from './ui/atelier/dom.js';
 import { CONTRACT_VERSION } from '@contracts';
 
@@ -16,6 +17,7 @@ mountEntry(async (entry) => {
   const adapter = createOneTrialPreview({
     adviceForSelf: false,
     requireConsentVersion: ENTRY_MATERIAL.consentVersion,
+    requirePractice: true,
   });
   const root = requireElement(document, '#paper2-immersive-root');
   function questionnaire(position: 'pre' | 'post'): Promise<void> {
@@ -30,6 +32,10 @@ mountEntry(async (entry) => {
   const chat = createScriptedChat((request) => run.authorizeChat(request));
   await run.initialize({ version: entry.consent_version, acceptedAt: entry.accepted_at });
   run.note('entry_completed', entry);
+  if (!run.hasPractice())
+    await mountPractice(root, run.trial.performance_reference, (payload) =>
+      run.submitPractice(payload),
+    );
   if (!run.restored || run.stage === 'prediction') await questionnaire('pre');
   mountImmersive(run, chat, () => ({
     simulation: true,

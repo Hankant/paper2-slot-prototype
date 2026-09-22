@@ -23,6 +23,8 @@ npm run collect:campus
 
 与 `collect:local` 使用同一数据库与参与码，但绑定 `0.0.0.0`，同一校园网内的手机/电脑可通过 `http://<本机内网IP>:5200/collect.html` 访问（启动时会打印当前 IP 与参与链接）。仅适用于校内现场试点：依赖 DHCP 分配的内网 IP（变化后需重跑命令获取新链接），且部分校园 Wi-Fi 开启客户端隔离会导致手机无法访问本机（可改有线网口验证）。这不是公网部署，离开校园网即不可达；首次运行可能弹出 Windows 防火墙提示，允许专用网络即可。
 
+来源表现和积分由忽略提交的 `private/collection/local-settings.json` 配置：`humanAverageHitRate`、`aiHitRate`、`aiAccuracyTier`、`pointsPerCorrect`、`rewardPerPointCny`。修改后需重新运行 `npm run build:all` 并重启采集服务。`rewardPerPointCny: null` 表示尚未批准具体现金兑换率，界面只累计积分；设为非负数字后，导出按“总积分 × 每积分金额”计算奖励。
+
 流程：参与码与现场/远程选择 → 未预选的同意确认 → 操作说明 → 独立预测/信心 → 自己或 AI → 最终预测 → 开奖 → 服务端确认完成 → 下载本人 JSON。
 
 `preview.html` / `preview-immersive.html` 仍是内存演示，只有 `collect.html` 接入持久采集。正式 timeline 仍采用 jsPsych；本次复用的是单轮 TypeScript 界面。

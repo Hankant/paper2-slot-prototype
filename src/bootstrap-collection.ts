@@ -17,6 +17,7 @@ import {
 } from './domain/collection-materials.js';
 import { QUESTIONNAIRE_INSTRUMENT } from './domain/questionnaire-instrument-demo.js';
 import { mountQuestionnaireSequence } from './ui/questionnaire-overlay.js';
+import { mountPractice } from './ui/practice-overlay.js';
 
 function detectDeviceClass(): DeviceClass {
   if (/ipad|tablet|kindle|playbook/i.test(navigator.userAgent)) return 'tablet';
@@ -90,6 +91,10 @@ async function startCollection(
       consent_version: accepted.consent_version,
       instructions_version: accepted.instructions_version,
     });
+  if (!run.hasPractice())
+    await mountPractice(root, run.trial.performance_reference, (payload) =>
+      run.submitPractice(payload),
+    );
   if (!run.restored || run.stage === 'prediction') await questionnaire('pre');
   if (run.stage === 'feedback') await run.resumeFeedback();
   mountImmersive(
@@ -97,7 +102,7 @@ async function startCollection(
     createScriptedChat((request) => run.authorizeChat(request)),
     () => ({}),
     {
-      footer: '数据收集试点 · 模拟建议 · 服务器保存 · 同一浏览器会话内刷新可继续',
+      footer: '预测研究 · 服务器保存 · 同一浏览器会话内刷新可继续',
       saveStatus: '每次作答以服务器回执为准；完成前会确认全部作答与呈现记录。',
       downloadName: 'paper2-collection-export.json',
       exportRemote: async () => {
@@ -125,7 +130,7 @@ function showEntry(): void {
       material: COLLECTION_MATERIAL,
       badge: '数据收集试点',
       footerLeft: '预测任务 · 服务器保存试点',
-      footerRight: '合成数据 / 非正式招募',
+      footerRight: '研究试运行',
       credential: {},
       detectedDeviceClass: detectDeviceClass(),
     },

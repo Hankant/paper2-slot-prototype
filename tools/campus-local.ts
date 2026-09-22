@@ -15,6 +15,11 @@ const settings = JSON.parse(readFileSync(settingsFile, 'utf8')) as {
   entryCode: string;
   adminToken: string;
   port: number;
+  humanAverageHitRate?: number;
+  aiHitRate?: number;
+  aiAccuracyTier?: string;
+  pointsPerCorrect?: number;
+  rewardPerPointCny?: number | null;
 };
 if (!existsSync('dist-server/main.js')) throw new Error('请先执行 npm run build:all');
 
@@ -37,6 +42,14 @@ Object.assign(process.env, {
   STATIC_DIR: path.resolve('dist'),
   SECURE_COOKIES: 'false',
   NODE_ENV: 'development',
+  HUMAN_AVERAGE_HIT_RATE: String(settings.humanAverageHitRate ?? 0.55),
+  AI_HIT_RATE: String(settings.aiHitRate ?? 0.6),
+  AI_ACCURACY_TIER: settings.aiAccuracyTier ?? 'plus_5pp',
+  POINTS_PER_CORRECT: String(settings.pointsPerCorrect ?? 10),
+  REWARD_PER_POINT_CNY:
+    settings.rewardPerPointCny === null || settings.rewardPerPointCny === undefined
+      ? ''
+      : String(settings.rewardPerPointCny),
 });
 
 process.stdout.write(

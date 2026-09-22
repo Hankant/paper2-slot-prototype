@@ -165,7 +165,7 @@ export const QUESTIONNAIRE_INSTRUMENT = defineQuestionnaireInstrument({
       position: 'post',
       eyebrow: '任务后问卷 · 2 / 4',
       title: '对两种判断来源的评价',
-      intro: '1 表示非常不同意，7 表示非常同意。题目中的“AI 助手”指刚才页面呈现的模拟助手。',
+      intro: '1 表示非常不同意，7 表示非常同意。题目中的“AI 助手”指刚才任务中提供建议的助手。',
       submitLabel: '继续',
       randomizeQuestions: true,
       questions: [

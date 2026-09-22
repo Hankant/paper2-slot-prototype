@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { completePostQuestionnaires, completePreQuestionnaires } from '../helpers/questionnaire.js';
+import { completePractice } from '../helpers/practice.js';
 
 for (const source of ['human', 'ai'] as const) {
   test(`non-secure HTTP ${source}: consent, prediction, completion, reload and export`, async ({
@@ -23,6 +24,7 @@ for (const source of ['human', 'ai'] as const) {
     for (const check of await page.getByRole('checkbox').all()) await check.check();
     await page.getByRole('button', { name: /同意并查看操作说明/ }).click();
     await page.getByRole('button', { name: /开始实验/ }).click();
+    await completePractice(page);
     await completePreQuestionnaires(page);
     await page.getByRole('button', { name: '选择机器 A', exact: true }).click();
     await page.getByRole('button', { name: /确认独立预测/ }).click();
@@ -44,7 +46,7 @@ for (const source of ['human', 'ai'] as const) {
     await expect(page.locator('#step-label')).toHaveText('本轮完成');
     const data = await page.evaluate(async () => (await fetch('/api/export')).json());
     expect(data.completed).toBe(true);
-    expect(data.events).toHaveLength(source === 'ai' ? 14 : 13);
+    expect(data.events).toHaveLength(source === 'ai' ? 15 : 14);
     expect(new Set(data.events.map((event: { event_id: string }) => event.event_id)).size).toBe(
       data.events.length,
     );

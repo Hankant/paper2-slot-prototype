@@ -1,4 +1,6 @@
-2026-09-21 当前工作：[前测/后测问卷模块](2026-09-21-questionnaire-module.md)，VERIFIED：143 项单测、6 项预览浏览器测试、5 项 SQLite 收集测试、4 项 loopback 与 2 项校园裸 HTTP 回归通过。问卷题目集中在 `src/domain/questionnaire-instrument-demo.ts`。
+2026-09-22 当前工作：[试玩、来源表现与积分奖励](2026-09-22-practice-performance-points.md)，VERIFIED：145 项单测、6 项预览浏览器测试、11 项 SQLite/校园 HTTP 采集测试及完整构建通过。协议为 0.5.0；具体现金兑换率仍待研究团队确认。
+
+2026-09-21：[前测/后测问卷模块](2026-09-21-questionnaire-module.md)。问卷题目集中在 `src/domain/questionnaire-instrument-demo.ts`。
 
 同日基础修复：[校园网 HTTP 兼容修复](2026-09-21-campus-http.md)。
 

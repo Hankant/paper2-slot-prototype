@@ -108,6 +108,14 @@ export const SUCCESS_PUBLIC_TRIAL: PublicTrial = {
   advice_timing: 'after_choice',
   advice: SUCCESS_ADVICE,
   material_version: '0.3.0',
+  performance_reference: {
+    condition_id: 'test-condition',
+    human_average_hit_rate: 0.55,
+    ai_hit_rate: 0.6,
+    ai_accuracy_tier: 'plus_5pp',
+    points_per_correct: 10,
+    reward_per_point_cny: null,
+  },
 };
 
 export const SUCCESS_EXPERIMENT_STATE: ExperimentState = {
@@ -254,6 +262,14 @@ export const REJECTED_PUBLIC_TRIAL: PublicTrialInput = {
   machines: [{ machine_id: 'A', display_position: 'left', label: '机器 A' }],
   advice_timing: 'none',
   material_version: '0.3.0',
+  performance_reference: {
+    condition_id: 'test-condition',
+    human_average_hit_rate: 0.55,
+    ai_hit_rate: 0.6,
+    ai_accuracy_tier: 'plus_5pp',
+    points_per_correct: 10,
+    reward_per_point_cny: null,
+  },
 };
 
 export const REJECTED_SESSION: SessionInput = {

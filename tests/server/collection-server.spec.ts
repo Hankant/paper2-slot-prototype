@@ -13,8 +13,8 @@ import { createCollectionServer } from '../../server/app.js';
 
 const ENTRY_CODE = 'TEST-ENTRY-0001';
 const ADMIN_TOKEN = 'test-admin-token-0123456789abcdef';
-const CONSENT_VERSION = 'collect-consent-2026-09-19-v1';
-const INSTRUCTIONS_VERSION = 'collect-instructions-2026-09-19-v1';
+const CONSENT_VERSION = 'collect-consent-2026-09-22-v2';
+const INSTRUCTIONS_VERSION = 'collect-instructions-2026-09-22-v2';
 const TRIAL_ID = 'preview-trial-1';
 const ADVICE_ID = 'preview-advice-1';
 
@@ -131,6 +131,7 @@ function makeEvent(
 ): EventEnvelope {
   const trialLevel = ![
     'consent_recorded',
+    'practice_completed',
     'profile_submitted',
     'session_completion_requested',
   ].includes(type);
@@ -145,7 +146,8 @@ function makeEvent(
     event_id: randomUUID(),
     sequence_no: eventCounter,
     ...(trialLevel ? { trial_id: TRIAL_ID } : {}),
-    phase: type === 'consent_recorded' ? 'consent' : 'main',
+    phase:
+      type === 'consent_recorded' ? 'consent' : type === 'practice_completed' ? 'practice' : 'main',
     event_type: type,
     client_timestamp: new Date().toISOString(),
     elapsed_ms: eventCounter * 250,
@@ -566,7 +568,8 @@ describe('collection server', () => {
     expect(rowA).toContain('false'); // final_correct for machine B
     const rowB = csvText.split('\r\n').find((line) => line.includes(sessionB.session_id)) ?? '';
     const rowBCells = rowB.split(',');
-    expect(rowBCells[11]).toBe(''); // actual_winner missing before final
+    const csvHeader = csvText.split('\r\n')[0]?.split(',') ?? [];
+    expect(rowBCells[csvHeader.indexOf('actual_winner_machine_id')]).toBe('');
 
     // Logout clears the cookie but never deletes records.
     const logout = await clientA.request('POST', '/api/logout', {});

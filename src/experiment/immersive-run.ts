@@ -72,6 +72,7 @@ export class ImmersiveRun {
   source: 'human' | 'ai' | null = null;
   advice: RevealedAdviceBlock | null = null;
   feedback: TrialFeedback | null = null;
+  practicePoints = 0;
   sequence = 0;
   chatCompleted = false;
   restored = false;
@@ -128,6 +129,9 @@ export class ImmersiveRun {
     const confidence = this.records.get('confidence_submitted')?.event;
     if (confidence?.event_type === 'confidence_submitted')
       this.confidence = confidence.payload.confidence_percent;
+    const practice = this.records.get('practice_completed')?.event;
+    if (practice?.event_type === 'practice_completed')
+      this.practicePoints = practice.payload.total_points;
     const source = this.records.get('source_selected')?.event;
     if (
       source?.event_type === 'source_selected' &&
@@ -214,6 +218,13 @@ export class ImmersiveRun {
   hasQuestionnaireBlock(blockId: string): boolean {
     return this.records.get(`questionnaire_block_submitted:${blockId}`)?.confirmed === true;
   }
+  hasPractice(): boolean {
+    return this.records.get('practice_completed')?.confirmed === true;
+  }
+  async submitPractice(payload: EventPayloadMap['practice_completed']): Promise<void> {
+    await this.save('practice_completed', payload);
+    this.practicePoints = payload.total_points;
+  }
   private selection(id: string): {
     machine_id: string;
     display_position: 'left' | 'center' | 'right';
@@ -242,17 +253,20 @@ export class ImmersiveRun {
           phase:
             type === 'consent_recorded'
               ? 'consent'
-              : type === 'questionnaire_block_submitted'
-                ? (payload as EventPayloadMap['questionnaire_block_submitted']).position === 'pre'
-                  ? 'profile'
-                  : 'finalizing'
-                : 'main',
+              : type === 'practice_completed'
+                ? 'practice'
+                : type === 'questionnaire_block_submitted'
+                  ? (payload as EventPayloadMap['questionnaire_block_submitted']).position === 'pre'
+                    ? 'profile'
+                    : 'finalizing'
+                  : 'main',
           event_type: type,
           client_timestamp: timestamp ?? new Date().toISOString(),
           elapsed_ms: Math.round(performance.now() - this.clock),
           ...([
             'session_completion_requested',
             'consent_recorded',
+            'practice_completed',
             'questionnaire_block_submitted',
           ].includes(type)
             ? {}

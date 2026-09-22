@@ -31,6 +31,14 @@ interface SessionExport {
     session_id: string;
     participant_id: string;
     metadata: { participation_mode: string; device_class: string };
+    group_assignment: string;
+    condition_assignment?: {
+      human_average_hit_rate: number;
+      ai_hit_rate: number;
+      ai_accuracy_tier: string;
+      points_per_correct: number;
+      reward_per_point_cny: number | null;
+    };
   };
   feedback: {
     actual_winner_machine_id: string;
@@ -58,6 +66,15 @@ test.beforeEach(async () => {
     adminToken: ADMIN_TOKEN,
     staticDir: path.resolve('dist'),
     secureCookies: false,
+    practiceRequired: true,
+    performanceReference: {
+      condition_id: 'e2e-human55-ai60',
+      human_average_hit_rate: 0.55,
+      ai_hit_rate: 0.6,
+      ai_accuracy_tier: 'plus_5pp',
+      points_per_correct: 10,
+      reward_per_point_cny: 0.01,
+    },
   });
   await new Promise<void>((resolve) => server.server.listen(0, '127.0.0.1', resolve));
   const address = server.server.address();
@@ -79,9 +96,7 @@ async function enterAccess(page: Page, entryCode: string): Promise<void> {
 }
 
 async function completeConsent(page: Page): Promise<void> {
-  await expect(
-    page.getByRole('heading', { name: '预测任务参与知情同意书（数据收集试点）' }),
-  ).toBeVisible();
+  await expect(page.getByRole('heading', { name: '预测任务参与知情同意书' })).toBeVisible();
   const accept = page.getByRole('button', { name: /同意并查看操作说明/ });
   await expect(accept).toBeDisabled();
   const checks = page.locator('.consent-checks input[type="checkbox"]');
@@ -95,10 +110,21 @@ async function completeConsent(page: Page): Promise<void> {
   await expect(page.getByRole('heading', { name: '一次预测，分三步完成。' })).toBeVisible();
 }
 
+async function completePractice(page: Page): Promise<void> {
+  await expect(page.getByRole('heading', { name: '先试玩三轮，熟悉预测与计分' })).toBeVisible();
+  for (const [index, machine] of ['A', 'A', 'B'].entries()) {
+    await page.locator(`.practice-machine[data-machine="${machine}"]`).click();
+    await page.getByRole('button', { name: '确认并开奖', exact: true }).click();
+    if (index < 2) await page.getByRole('button', { name: '下一轮', exact: true }).click();
+    else await page.getByRole('button', { name: '完成试玩', exact: true }).click();
+  }
+}
+
 async function enter(page: Page): Promise<void> {
   await enterAccess(page, ENTRY_CODE);
   await completeConsent(page);
   await page.getByRole('button', { name: /开始实验/ }).click();
+  await completePractice(page);
   await completePreQuestionnaires(page);
   await expect(page.getByRole('button', { name: '选择机器 A', exact: true })).toBeVisible();
 }
@@ -170,6 +196,7 @@ test('correct entry code passes consent and instructions gating into the trial',
   // Instructions: no trial UI before the explicit start.
   await expect(page.getByRole('button', { name: '选择机器 A' })).toHaveCount(0);
   await page.getByRole('button', { name: /开始实验/ }).click();
+  await completePractice(page);
   await completePreQuestionnaires(page);
   await expect(page.getByRole('button', { name: '选择机器 A', exact: true })).toBeVisible();
 
@@ -180,6 +207,13 @@ test('correct entry code passes consent and instructions gating into the trial',
   expect(body.completed).toBe(false);
   expect(body.session.metadata.participation_mode).toBe('remote');
   expect(body.session.metadata.device_class).toBe('desktop');
+  expect(body.session.group_assignment).toBe('e2e-human55-ai60');
+  expect(body.session.condition_assignment).toMatchObject({
+    human_average_hit_rate: 0.55,
+    ai_hit_rate: 0.6,
+    ai_accuracy_tier: 'plus_5pp',
+    reward_per_point_cny: 0.01,
+  });
   expect(errors).toEqual([]);
 });
 
@@ -197,6 +231,7 @@ test('full AI-branch trial: advice, final answer, feedback and durable finish', 
   expect(data.completed).toBe(true);
   expect(data.events.map((event) => event.event_type)).toEqual([
     'consent_recorded',
+    'practice_completed',
     'questionnaire_block_submitted',
     'questionnaire_block_submitted',
     'prediction_submitted',
@@ -212,7 +247,14 @@ test('full AI-branch trial: advice, final answer, feedback and durable finish', 
     'session_completion_requested',
   ]);
   expectNoDuplicateEvents(data.events);
-  expect(data.entry.consent_version).toBe('collect-consent-2026-09-19-v1');
+  expect(data.entry.consent_version).toBe('collect-consent-2026-09-22-v2');
+  expect(data.events[1]?.payload).toMatchObject({
+    condition_id: 'e2e-human55-ai60',
+    human_average_hit_rate: 0.55,
+    ai_hit_rate: 0.6,
+    total_points: 20,
+    reward_per_point_cny: 0.01,
+  });
   expect(data.entry).not.toHaveProperty('entry_code');
   expect(data.feedback).not.toBeNull();
   if (!data.feedback) throw new Error('feedback missing');
@@ -246,7 +288,7 @@ test('reload mid-trial restores server progress and never duplicates events', as
 
   const data = await exportOwn(page);
   expect(data.completed).toBe(true);
-  expect(data.events).toHaveLength(13);
+  expect(data.events).toHaveLength(14);
   expectNoDuplicateEvents(data.events);
   expect(data.events.filter((event) => event.event_type === 'prediction_submitted')).toHaveLength(
     1,

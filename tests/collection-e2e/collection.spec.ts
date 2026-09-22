@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { completePostQuestionnaires, completePreQuestionnaires } from '../helpers/questionnaire.js';
+import { completePractice } from '../helpers/practice.js';
 async function enter(page: Page) {
   await page.goto('/collect.html');
   await page.getByLabel('参与码', { exact: true }).fill('PAPER2-TEST');
@@ -9,6 +10,7 @@ async function enter(page: Page) {
   for (let i = 0; i < (await checks.count()); i++) await checks.nth(i).check();
   await page.getByRole('button', { name: /同意并查看操作说明/ }).click();
   await page.getByRole('button', { name: /开始实验/ }).click();
+  await completePractice(page);
   await completePreQuestionnaires(page);
   await expect(page.getByRole('button', { name: '选择机器 A', exact: true })).toBeVisible();
 }
@@ -37,7 +39,11 @@ for (const width of [1280, 390])
     await expect(page.locator('#step-label')).toHaveText('本轮完成');
     const before = await (await page.request.get('/api/export')).json();
     expect(before.completed).toBe(true);
-    expect(before.events).toHaveLength(13);
+    expect(before.events).toHaveLength(14);
+    expect(before.events[1]).toMatchObject({
+      event_type: 'practice_completed',
+      payload: { human_average_hit_rate: 0.55, ai_hit_rate: 0.6, total_points: 20 },
+    });
     expect(before.feedback.final_correct).toBe(true);
     expect(before.feedback.advice_evaluation.advice_exposed).toBe(false);
     expect(before.entry).not.toHaveProperty('entry_code');
@@ -118,7 +124,7 @@ test('AI reload before advice, streamed answer, failed finish stays pending and 
   await expect(page.locator('#step-label')).toHaveText('本轮完成');
   const data = await (await page.request.get('/api/export')).json();
   expect(data.completed).toBe(true);
-  expect(data.events).toHaveLength(14);
+  expect(data.events).toHaveLength(15);
   expect(
     data.presentation_audit.some((a: { type: string }) => a.type === 'chat_display_completed'),
   ).toBe(true);

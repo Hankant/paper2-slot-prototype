@@ -2,6 +2,20 @@ import { expect, test, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { completePostQuestionnaires, completePreQuestionnaires } from '../helpers/questionnaire.js';
 
+async function completePractice(page: Page, width?: number): Promise<void> {
+  await expect(page.getByRole('heading', { name: '先试玩三轮，熟悉预测与计分' })).toBeVisible();
+  await expect(page.getByText('人类平均命中率')).toBeVisible();
+  await expect(page.getByText('AI 助手命中率')).toBeVisible();
+  if (width)
+    await page.screenshot({ path: `artifacts/qa/atelier/practice-${width}.png`, fullPage: true });
+  for (const [index, machine] of ['A', 'A', 'B'].entries()) {
+    await page.locator(`.practice-machine[data-machine="${machine}"]`).click();
+    await page.getByRole('button', { name: '确认并开奖', exact: true }).click();
+    if (index < 2) await page.getByRole('button', { name: '下一轮', exact: true }).click();
+    else await page.getByRole('button', { name: '完成试玩', exact: true }).click();
+  }
+}
+
 async function completeEntry(page: Page, width?: number): Promise<void> {
   await expect(page.getByRole('heading', { name: '预测任务参与知情同意书' })).toBeVisible();
   await expect(page.getByRole('button', { name: '选择机器 A' })).toHaveCount(0);
@@ -22,6 +36,7 @@ async function completeEntry(page: Page, width?: number): Promise<void> {
       fullPage: true,
     });
   await page.getByRole('button', { name: /开始实验/ }).click();
+  await completePractice(page, width);
   await completePreQuestionnaires(page);
 }
 
@@ -100,7 +115,7 @@ for (const width of [1280, 390]) {
     const file = await (await download).path();
     if (!file) throw new Error('download missing');
     const data = JSON.parse(await readFile(file, 'utf8'));
-    expect(data.events).toHaveLength(14);
+    expect(data.events).toHaveLength(15);
     expect(data.events[0]).toMatchObject({
       event_type: 'consent_recorded',
       phase: 'consent',
@@ -109,6 +124,18 @@ for (const width of [1280, 390]) {
       client_timestamp: data.entry.accepted_at,
     });
     expect(data.events[0]).not.toHaveProperty('trial_id');
+    expect(data.events[1]).toMatchObject({
+      event_type: 'practice_completed',
+      phase: 'practice',
+      payload: {
+        condition_id: 'human-55_ai-plus5',
+        human_average_hit_rate: 0.55,
+        ai_hit_rate: 0.6,
+        ai_accuracy_tier: 'plus_5pp',
+        total_points: 20,
+      },
+    });
+    expect(data.events[1]).not.toHaveProperty('trial_id');
     expect(data.entry_material.consentVersion).toBe(data.entry.consent_version);
     expect(Date.parse(data.entry.accepted_at)).toBeLessThanOrEqual(
       Date.parse(data.entry.started_at),
@@ -151,7 +178,7 @@ test('atelier 360: self branch, no advice, actual winner scoring', async ({ page
     advice_exposed: false,
     final_matches_advice: null,
   });
-  expect(data.events).toHaveLength(13);
+  expect(data.events).toHaveLength(14);
   await expect(page.locator('.experience-error')).toBeEmpty();
 });
 

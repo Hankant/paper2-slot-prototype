@@ -18,6 +18,16 @@ export interface ImmersiveMountOptions {
   readonly completedFeedback?: TrialFeedback;
 }
 
+function percent(value: number): string {
+  return `${Math.round(value * 100)}%`;
+}
+
+function totalRewardText(run: ImmersiveRun, mainPoints = 0): string {
+  const total = run.practicePoints + mainPoints;
+  const rate = run.trial.performance_reference.reward_per_point_cny;
+  return rate === null ? `${total} 积分` : `${total} 积分 · ¥${(total * rate).toFixed(2)}`;
+}
+
 export function mountImmersive(
   run: ImmersiveRun,
   service: ChatService,
@@ -36,14 +46,15 @@ export function mountImmersive(
     return chat;
   };
   root.innerHTML = `<div class="experience">
-    <header class="topbar"><a class="wordmark" href="./index.html"><span class="brand-mark">p.</span> PREDICTION LAB</a><span class="demo-tag"><i></i>交互演示</span><span class="round-counter">ROUND <b>01</b><span>/ 01</span></span></header>
-    <main><div class="intro"><div><p class="eyebrow">观察 · 判断 · 选择</p><h1>这一轮，你看好哪一台？</h1><p class="intro-copy">预测本轮实际中奖的机器。历史表现供你参考。</p></div><div class="round-note"><span>一次预测，三种可能。</span><span>最后的选择，由你决定。</span></div></div>
+    <header class="topbar"><a class="wordmark" href="./index.html"><span class="brand-mark">p.</span> PREDICTION LAB</a><span class="demo-tag"><i></i>研究任务</span><span class="score-counter">当前 ${totalRewardText(run)}</span><span class="round-counter">ROUND <b>01</b><span>/ 01</span></span></header>
+    <main><div class="intro"><div><p class="eyebrow">观察 · 判断 · 选择</p><h1>这一轮，你看好哪一台？</h1><p class="intro-copy">预测本轮实际中奖的机器。近期开奖记录供你参考。</p></div><div class="round-note"><span>一次预测，三种可能。</span><span>最后的选择，由你决定。</span></div></div>
+    <section class="source-performance-strip" aria-label="来源历史表现"><div><span>人类平均命中率</span><b>${percent(run.trial.performance_reference.human_average_hit_rate)}</b></div><div><span>AI 助手命中率</span><b>${percent(run.trial.performance_reference.ai_hit_rate)}</b></div><p>预测正确 +${run.trial.performance_reference.points_per_correct} 积分</p></section>
     <ol class="progress"><li data-stage="prediction"><span>01</span>独立预测</li><li data-stage="source"><span>02</span>参考来源</li><li data-stage="final"><span>03</span>最终判断</li><li data-stage="ready"><span>04</span>启动开奖</li></ol>
     <section class="machine-stage" aria-label="三台老虎机"><div class="machine-grid"></div><div class="console-base"><span>THREE MACHINES. ONE OUTCOME.</span><span class="live-status"><i></i><span id="machine-status">等待你的选择</span></span></div></section>
     <section class="decision-area" aria-label="当前操作"><div class="decision-copy"><p class="eyebrow" id="step-label"></p><h2 id="step-title"></h2><p id="step-help"></p></div><div class="decision-controls"></div></section>
     <p class="experience-error" role="alert"></p><div class="result-card" hidden></div>
     ${options.saveStatus === undefined ? '' : `<p class="remote-save-status" role="status">${options.saveStatus}</p>`}
-    </main><footer class="experience-footer"><span>${options.footer ?? '固定材料演示 · 非真实 AI 预测 · 本页内存保存，刷新清空'}</span><span>界面预览 / 非正式实验</span></footer></div>`;
+    </main><footer class="experience-footer"><span>${options.footer ?? '预测任务 · 本页内存保存，刷新清空'}</span><span>研究界面预览</span></footer></div>`;
   for (const machine of run.trial.machines) {
     const rate = run.trial.visible_history.find(
       (h) => h.machine_id === machine.machine_id,
@@ -55,8 +66,8 @@ export function mountImmersive(
       <div class="cabinet-header"><span class="engraving">PREDICTION</span><h2>机器 ${machine.machine_id}</h2><span class="cabinet-led"></span></div>
       <div class="reel-frame"><div class="reel-windows"></div><div class="payline"><span>▸</span><span>◂</span></div></div>
       <div class="cabinet-controls"><button class="machine-select" aria-label="选择机器 ${machine.machine_id}" aria-pressed="false"><span>选择</span><b>${machine.machine_id}</b></button><div class="cabinet-grille"></div></div>
-      <div class="cabinet-foot"><i></i><span>SIMULATION SERIES</span><i></i></div>
-      <div class="machine-history"><span>模拟历史命中率</span><b>${rate === undefined ? '—' : Math.round(rate * 100) + '%'}</b><div class="history-track"><i style="width:${rate === undefined ? 0 : rate * 100}%"></i></div></div>`;
+      <div class="cabinet-foot"><i></i><span>PREDICTION SERIES</span><i></i></div>
+      <div class="machine-history"><span>近期开奖占比</span><b>${rate === undefined ? '—' : Math.round(rate * 100) + '%'}</b><div class="history-track"><i style="width:${rate === undefined ? 0 : rate * 100}%"></i></div></div>`;
     const symbols = ['cherry', 'lemon', 'bell'];
     for (let i = 0; i < 3; i += 1) {
       const cell = document.createElement('div');
@@ -152,7 +163,11 @@ export function mountImmersive(
       ],
       spinning: ['04 / 正在开奖', '让转轮揭晓答案', '本轮预测已锁定，请稍候。'],
       feedback: run.completed
-        ? ['本轮完成', '每一次判断，都留下记录', '你可以下载本轮记录，或重新体验。']
+        ? [
+            '本轮完成',
+            '感谢完成本次任务',
+            '研究结束说明：本次试运行中的 AI 表现档位与建议输出由研究程序控制，并非由外部大语言模型实时生成。这样设置是为了保证不同参与者看到可比较的材料。',
+          ]
         : [
             '等待保存确认',
             '结果已揭晓，记录尚未全部确认',
@@ -259,7 +274,9 @@ export function mountImmersive(
     });
     const result = get('.result-card');
     result.hidden = false;
-    result.innerHTML = `<div class="result-symbol">${symbol('bell')}</div><div><p class="eyebrow">本轮结果</p><h2>机器 ${feedback.actual_winner_machine_id} 中奖</h2><p>独立预测 ${run.independent} · 最终预测 ${run.final}${run.source === 'ai' ? ` · 助手建议 ${run.advice?.advice_target_machine_id}` : ''}</p></div><div class="result-score"><b>+${feedback.points_awarded}</b><span>模拟积分 · ${feedback.final_correct ? '预测正确' : '本轮未命中'}</span></div>`;
+    result.innerHTML = `<div class="result-symbol">${symbol('bell')}</div><div><p class="eyebrow">本轮结果</p><h2>机器 ${feedback.actual_winner_machine_id} 中奖</h2><p>独立预测 ${run.independent} · 最终预测 ${run.final}${run.source === 'ai' ? ` · 助手建议 ${run.advice?.advice_target_machine_id}` : ''}</p></div><div class="result-score"><b>+${feedback.points_awarded}</b><span>${feedback.final_correct ? '预测正确' : '本轮未命中'} · 累计 ${totalRewardText(run, feedback.points_awarded)}</span></div>`;
+    const score = root.querySelector<HTMLElement>('.score-counter');
+    if (score) score.textContent = `累计 ${totalRewardText(run, feedback.points_awarded)}`;
   }
   async function draw(): Promise<void> {
     const result = await run.startDraw();

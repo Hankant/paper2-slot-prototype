@@ -9,6 +9,7 @@ import {
   type ExperimentAdapter,
   type ExperimentEventType,
   type PublicTrial,
+  type PerformanceReference,
   type RevealedAdviceBlock,
   type SaveReceipt,
   type Session,
@@ -28,7 +29,15 @@ const advice: RevealedAdviceBlock = {
   revealed: true,
   advice_target_machine_id: 'B',
   advice_target_display_position: 'center',
-  copy: '模拟 AI 建议选择机器 B。这是预设建议，不是真实 AI 预测。',
+  copy: '综合本轮信息，我建议选择机器 B。建议仅供参考，请由你确认最终预测。',
+};
+const DEFAULT_PERFORMANCE_REFERENCE: PerformanceReference = {
+  condition_id: 'human-55_ai-plus5',
+  human_average_hit_rate: 0.55,
+  ai_hit_rate: 0.6,
+  ai_accuracy_tier: 'plus_5pp',
+  points_per_correct: 10,
+  reward_per_point_cny: null,
 };
 const required: ExperimentEventType[] = [
   'prediction_submitted',
@@ -63,23 +72,28 @@ export function createOneTrialPreview(
   options: {
     adviceForSelf?: boolean;
     requireConsentVersion?: string;
+    requirePractice?: boolean;
+    performanceReference?: PerformanceReference;
     /** Server-only: pin identity/metadata so a durable backend can replay
      *  the exact session after a restart. Omit for the browser preview. */
     seedSession?: Partial<Session>;
   } = {},
 ): ExperimentAdapter & { exportEvents(): EventEnvelope[] } {
   const seed = options.seedSession ?? {};
+  const performanceReference =
+    seed.condition_assignment ?? options.performanceReference ?? DEFAULT_PERFORMANCE_REFERENCE;
   const defaults: Session = {
     session_id: randomId(),
     participant_id: 'virtual-preview',
     recruitment_batch: 'preview',
-    group_assignment: 'simulation',
+    group_assignment: performanceReference.condition_id,
     study_id: 'one-trial-preview',
     protocol_version: 'unreleased',
     material_version: '0.3.0',
     contract_version: CONTRACT_VERSION,
     adapter_version: '0.3.0',
     provider: 'memory-preview',
+    condition_assignment: performanceReference,
     metadata: {
       participation_mode: 'unknown',
       device_class: 'unknown',
@@ -98,6 +112,7 @@ export function createOneTrialPreview(
   const entryRequired: ExperimentEventType[] = options.requireConsentVersion
     ? ['consent_recorded']
     : [];
+  if (options.requirePractice) entryRequired.push('practice_completed');
   let opened = false;
   let completed = false;
   let adviceLoaded = false;
@@ -140,7 +155,9 @@ export function createOneTrialPreview(
         ? 'completed'
         : options.requireConsentVersion && !has('consent_recorded')
           ? 'consent'
-          : 'main',
+          : options.requirePractice && !has('practice_completed')
+            ? 'practice'
+            : 'main',
     };
   }
   function checkEvent(event: EventEnvelope): void {
@@ -177,17 +194,44 @@ export function createOneTrialPreview(
     const expectedPhase =
       event.event_type === 'consent_recorded'
         ? 'consent'
-        : event.event_type === 'questionnaire_block_submitted'
-          ? event.payload.position === 'pre'
-            ? 'profile'
-            : 'finalizing'
-          : 'main';
+        : event.event_type === 'practice_completed'
+          ? 'practice'
+          : event.event_type === 'questionnaire_block_submitted'
+            ? event.payload.position === 'pre'
+              ? 'profile'
+              : 'finalizing'
+            : 'main';
     if (event.phase !== expectedPhase) fail('事件阶段不匹配', 'INVALID_EVENT');
     if (
       event.event_type === 'consent_recorded' &&
       event.payload.version !== options.requireConsentVersion
     )
       fail('参与说明版本不匹配', 'INVALID_EVENT');
+    if (event.event_type === 'practice_completed') {
+      const expected = performanceReference;
+      if (
+        event.payload.condition_id !== expected.condition_id ||
+        event.payload.human_average_hit_rate !== expected.human_average_hit_rate ||
+        event.payload.ai_hit_rate !== expected.ai_hit_rate ||
+        event.payload.ai_accuracy_tier !== expected.ai_accuracy_tier ||
+        event.payload.points_per_correct !== expected.points_per_correct ||
+        event.payload.reward_per_point_cny !== expected.reward_per_point_cny
+      )
+        fail('试玩条件与后台分配不一致', 'INVALID_EVENT');
+      const recomputed = event.payload.trials.reduce(
+        (sum, trial) => sum + (trial.correct ? expected.points_per_correct : 0),
+        0,
+      );
+      if (
+        event.payload.total_points !== recomputed ||
+        event.payload.trials.some(
+          (trial) =>
+            trial.correct !== (trial.predicted_machine_id === trial.actual_winner_machine_id) ||
+            trial.points_awarded !== (trial.correct ? expected.points_per_correct : 0),
+        )
+      )
+        fail('试玩计分不一致', 'INVALID_EVENT');
+    }
     if (event.trial_id !== undefined && event.trial_id !== PREVIEW_TRIAL_ID)
       fail('试次不匹配', 'INVALID_EVENT');
     if (
@@ -305,6 +349,7 @@ export function createOneTrialPreview(
           })),
           advice_timing: 'after_choice',
           material_version: '0.3.0',
+          performance_reference: { ...performanceReference },
           advice: has('advice_revealed')
             ? { ...advice }
             : { advice_id: advice.advice_id, revealed: false },
@@ -339,7 +384,8 @@ export function createOneTrialPreview(
           advice_target_hit: null, // Deprecated; explicit reason is recorded in advice_evaluation.
           advice_actual_hit: evaluation.advice_correct,
           advice_evaluation: evaluation,
-          points_awarded: final.payload.machine_id === winner ? 10 : 0,
+          points_awarded:
+            final.payload.machine_id === winner ? performanceReference.points_per_correct : 0,
           scoring_version: '0.3.1',
           required_event_types: [...entryRequired, ...required].filter(
             (type) => !(selfWithoutAdvice() && type === 'advice_revealed'),

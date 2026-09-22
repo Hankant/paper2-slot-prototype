@@ -129,6 +129,36 @@ describe('contracts: event envelope (post-R1)', () => {
     expect(result.success).toBe(true);
   });
 
+  it('accepts a recorded practice block without trial_id', () => {
+    const result = eventEnvelopeSchema.safeParse({
+      ...entryEnvelope,
+      event_type: 'practice_completed',
+      phase: 'practice',
+      payload: {
+        practice_version: 'slot-practice-0.1.0',
+        condition_id: 'human-55_ai-plus5',
+        human_average_hit_rate: 0.55,
+        ai_hit_rate: 0.6,
+        ai_accuracy_tier: 'plus_5pp',
+        points_per_correct: 10,
+        reward_per_point_cny: null,
+        trials: [
+          {
+            practice_trial_id: 'practice-01',
+            predicted_machine_id: 'A',
+            actual_winner_machine_id: 'A',
+            correct: true,
+            points_awarded: 10,
+            response_ms: 800,
+          },
+        ],
+        total_points: 10,
+      },
+    });
+    expect(result.success).toBe(true);
+    expect(result.success && result.data.trial_id).toBeUndefined();
+  });
+
   it('rejects entry-level consent_recorded that carries trial_id', () => {
     const result = eventEnvelopeSchema.safeParse({
       ...entryEnvelope,
