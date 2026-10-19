@@ -33,6 +33,7 @@ export default defineConfig({
   build: {
     rollupOptions: {
       input: {
+        admin: fileURLToPath(new URL('./src/ui/admin.html', import.meta.url)),
         status: fileURLToPath(new URL('./src/ui/index.html', import.meta.url)),
         preview: fileURLToPath(new URL('./src/ui/preview.html', import.meta.url)),
         collect: fileURLToPath(new URL('./src/ui/collect.html', import.meta.url)),

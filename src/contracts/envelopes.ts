@@ -17,7 +17,8 @@
  * Comprehension and visibility events may also occur outside a trial.
  *
  * Entry-level events MUST NOT carry `trial_id`:
- *   consent_recorded, profile_submitted, session_completion_requested
+ *   consent_recorded, profile_submitted, session_completion_requested,
+ *   block_intro_presented, block_completed
  */
 
 import type { SemverTag } from './protocol-versions.js';
@@ -82,6 +83,8 @@ export const EXPERIMENT_EVENT_TYPES = [
   'feedback_presented',
   'visibility_changed',
   'questionnaire_block_submitted',
+  'block_intro_presented',
+  'block_completed',
   'session_completion_requested',
 ] as const;
 
@@ -103,6 +106,8 @@ export const ENTRY_LEVEL_EVENTS: ReadonlyArray<ExperimentEventType> = [
   'practice_completed',
   'profile_submitted',
   'questionnaire_block_submitted',
+  'block_intro_presented',
+  'block_completed',
   'session_completion_requested',
 ];
 
@@ -155,6 +160,7 @@ export interface EventPayloadMap {
     instrument_version: string;
     wording_profile: 'SELF_AI' | 'HUMAN_AI';
     position: 'pre' | 'post';
+    comprehension_errors?: Array<{ item_id: string; incorrect_count: number }>;
     item_order: string[];
     responses: Array<{
       item_id: string;
@@ -162,6 +168,29 @@ export interface EventPayloadMap {
       skipped: boolean;
       response_ms: number;
     }>;
+  };
+  /** minimax (2026-09-23): emitted when the participant clicks "进入本环节"
+   *  on the inter-block intro screen. Records the block meta and the
+   *  participant's acknowledgement timestamp. */
+  block_intro_presented: {
+    block_id: string;
+    block_kind: 'test' | 'formal';
+    block_index: number;
+    total_trials: number;
+    intro_notice: string;
+  };
+  /** minimax (2026-09-23): emitted after the last trial in a block has
+   *  finished, before the switch screen is rendered. Captures per-block
+   *  summary stats used by the orchestrator and downstream analysis. */
+  block_completed: {
+    block_id: string;
+    block_kind: 'test' | 'formal';
+    block_index: number;
+    trials_completed: number;
+    correct_count: number;
+    total_points_earned: number;
+    had_source_choice: boolean;
+    score_excluded_from_formal: boolean;
   };
   session_completion_requested: { ack_required_event_count: number };
 }
@@ -178,6 +207,8 @@ type EntryEvent =
   | 'practice_completed'
   | 'profile_submitted'
   | 'questionnaire_block_submitted'
+  | 'block_intro_presented'
+  | 'block_completed'
   | 'session_completion_requested';
 export type EventEnvelope = {
   [K in ExperimentEventType]: Omit<EventEnvelopeBase, 'event_type' | 'payload' | 'trial_id'> & {

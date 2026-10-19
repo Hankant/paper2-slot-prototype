@@ -1,3 +1,12 @@
+import { adminConfigSchema, type AdminConfig } from '../src/domain/admin-config.js';
+import { createExperimentPlan } from '../src/domain/experiment-plan.js';
+import { QUESTIONNAIRE_INSTRUMENT } from '../src/domain/questionnaire-instrument-demo.js';
+import { rewardCode } from '../src/domain/reward-code.js';
+import {
+  experimentPlanSchema,
+  trialIds,
+  type ExperimentPlan,
+} from '../src/contracts/experiment-plan.js';
 /**
  * Durable SQLite + HTTP collection backend (see .agents/architecture.md).
  *
@@ -10,7 +19,7 @@
  *   Bearer token supplied via configuration.
  */
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
-import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
+import { createHash, randomBytes, randomUUID, randomInt, timingSafeEqual } from 'node:crypto';
 import { readFile, stat, realpath } from 'node:fs/promises';
 import { COLLECTION_MATERIAL } from '../src/domain/collection-materials.js';
 import path from 'node:path';
@@ -48,6 +57,7 @@ export interface CollectionServerOptions {
   secureCookies?: boolean;
   performanceReference?: PerformanceReference;
   practiceRequired?: boolean;
+  experimentPlan?: ExperimentPlan;
 }
 
 export interface CollectionServer {
@@ -65,6 +75,7 @@ interface SessionRow {
   advice_loaded: number;
   feedback_loaded: number;
   created_at: string;
+  private_seed: string;
 }
 
 interface EntryAck {
@@ -92,7 +103,10 @@ const MAX_BODY_BYTES = 1_000_000;
 const MAX_EVENTS_PER_BATCH = 200;
 const MAX_AUDIT_PER_BATCH = 500;
 const MAX_AUDIT_RECORD_BYTES = 32 * 1024;
-const SESSION_CREATIONS_PER_MINUTE = 30;
+// Campus NAT and the deployed reverse proxy can share one socket address.
+// Allow a 50-person admission burst plus retry headroom; keep a bounded limit.
+// Do not trust arbitrary X-Forwarded-For headers to bypass this protection.
+const SESSION_CREATIONS_PER_MINUTE = 120;
 
 /** Compare JSON content independent of object key insertion order. */
 function canonical(value: unknown): string {
@@ -157,12 +171,18 @@ export function createCollectionServer(options: CollectionServerOptions): Collec
     points_per_correct: 10,
     reward_per_point_cny: null,
   };
+  const configuredPlan = options.experimentPlan
+    ? experimentPlanSchema.parse(options.experimentPlan)
+    : undefined;
   const practiceRequired = options.practiceRequired === true;
   const staticRoot = options.staticDir ? path.resolve(options.staticDir) : null;
 
   const db = new DatabaseSync(options.databasePath);
   db.exec(`
     PRAGMA journal_mode = WAL;
+    CREATE TABLE IF NOT EXISTS config_revisions (
+      revision INTEGER PRIMARY KEY AUTOINCREMENT, body TEXT NOT NULL, created_at TEXT NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS sessions (
       session_id TEXT PRIMARY KEY,
       session_json TEXT NOT NULL,
@@ -173,6 +193,11 @@ export function createCollectionServer(options: CollectionServerOptions): Collec
       advice_loaded INTEGER NOT NULL DEFAULT 0,
       feedback_loaded INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS trial_access (
+      session_id TEXT NOT NULL, trial_id TEXT NOT NULL, advice_loaded INTEGER NOT NULL DEFAULT 0,
+      feedback_loaded INTEGER NOT NULL DEFAULT 0, feedback_json TEXT,
+      PRIMARY KEY(session_id,trial_id)
     );
     CREATE TABLE IF NOT EXISTS events (
       session_id TEXT NOT NULL,
@@ -200,10 +225,20 @@ export function createCollectionServer(options: CollectionServerOptions): Collec
     CREATE INDEX IF NOT EXISTS idx_audit_session ON audit(session_id);
   `);
 
+  const sessionColumns = db.prepare('PRAGMA table_info(sessions)').all() as { name: string }[];
+  if (!sessionColumns.some((c) => c.name === 'private_seed'))
+    db.exec("ALTER TABLE sessions ADD COLUMN private_seed TEXT NOT NULL DEFAULT ''");
+  const stmtAccess = db.prepare('SELECT * FROM trial_access WHERE session_id = ?');
+  const stmtAdviceAccess = db.prepare(
+    'INSERT INTO trial_access(session_id,trial_id,advice_loaded) VALUES(?,?,1) ON CONFLICT(session_id,trial_id) DO UPDATE SET advice_loaded=1',
+  );
+  const stmtFeedbackAccess = db.prepare(
+    'INSERT INTO trial_access(session_id,trial_id,feedback_loaded,feedback_json) VALUES(?,?,1,?) ON CONFLICT(session_id,trial_id) DO UPDATE SET feedback_loaded=1, feedback_json=excluded.feedback_json',
+  );
   const stmtFindByToken = db.prepare('SELECT * FROM sessions WHERE token_hash = ?');
   const stmtFindById = db.prepare('SELECT * FROM sessions WHERE session_id = ?');
   const stmtInsertSession = db.prepare(
-    'INSERT INTO sessions (session_id, session_json, entry_json, consent_version, token_hash, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+    'INSERT INTO sessions (session_id, session_json, entry_json, consent_version, token_hash, created_at, private_seed) VALUES (?, ?, ?, ?, ?, ?, ?)',
   );
   const stmtListSessions = db.prepare('SELECT * FROM sessions ORDER BY created_at ASC');
   const stmtInsertEvent = db.prepare(
@@ -228,17 +263,184 @@ export function createCollectionServer(options: CollectionServerOptions): Collec
     'SELECT body FROM audit WHERE session_id = ? ORDER BY at_ms ASC, audit_id ASC',
   );
 
+  function activeConfig(): { revision: number; config: AdminConfig } | null {
+    const row = db
+      .prepare('SELECT revision,body FROM config_revisions ORDER BY revision DESC LIMIT 1')
+      .get() as { revision: number; body: string } | undefined;
+    return row
+      ? { revision: row.revision, config: adminConfigSchema.parse(JSON.parse(row.body)) }
+      : null;
+  }
+  if (configuredPlan && !activeConfig()) {
+    const initial = adminConfigSchema.parse({
+      name: '初始配置',
+      plan: configuredPlan,
+      conditions: [performanceReference],
+    });
+    db.prepare('INSERT INTO config_revisions(body,created_at) VALUES(?,?)').run(
+      JSON.stringify(initial),
+      new Date().toISOString(),
+    );
+  }
+  function configResponse() {
+    const active = activeConfig();
+    return {
+      revision: active?.revision ?? 0,
+      config: active?.config ?? {
+        name: '新实验配置',
+        plan: createExperimentPlan(),
+        conditions: [performanceReference],
+      },
+      questionnaire_blocks: QUESTIONNAIRE_INSTRUMENT.blocks.map((b) => ({
+        id: b.id,
+        title: b.title,
+        position: b.position,
+        instrument_version: QUESTIONNAIRE_INSTRUMENT.version,
+      })),
+    };
+  }
+  function adminSessions() {
+    return (stmtListSessions.all() as unknown as SessionRow[]).map((row) => {
+      const session = JSON.parse(row.session_json) as Session;
+      const events = (stmtListEvents.all(row.session_id) as { body: string }[]).map(
+        (r) => JSON.parse(r.body) as EventEnvelope,
+      );
+      const access = stmtAccess.all(row.session_id) as {
+        trial_id: string;
+        feedback_json: string | null;
+      }[];
+      const results = access.flatMap((a) =>
+        a.feedback_json ? [JSON.parse(a.feedback_json) as TrialFeedback] : [],
+      );
+      const modules = session.experiment_plan?.modules ?? [];
+      const blocks = modules.flatMap((m) => (m.kind === 'trials' ? [m.block] : []));
+      const formalIds = new Set(
+        blocks.filter((b) => !b.scores_excluded_from_formal).flatMap(trialIds),
+      );
+      const formalPoints = results
+        .filter((f) => !session.experiment_plan || formalIds.has(f.trial_id))
+        .reduce((n, f) => n + f.points_awarded, 0);
+      const rate = session.condition_assignment?.reward_per_point_cny ?? null;
+      const finished = events.filter((e) => e.event_type === 'feedback_presented').length;
+      const questionnaires = events.filter((e) => e.event_type === 'questionnaire_block_submitted');
+      const errors = questionnaires.reduce(
+        (n, e) =>
+          n +
+          (e.event_type === 'questionnaire_block_submitted'
+            ? (e.payload.comprehension_errors ?? []).reduce((a, b) => a + b.incorrect_count, 0)
+            : 0),
+        0,
+      );
+      const last = db
+        .prepare('SELECT MAX(at_ms) AS last FROM receipts WHERE session_id=?')
+        .get(row.session_id) as { last: number | null };
+      const updated = last.last === null ? row.created_at : new Date(last.last).toISOString();
+      const issues: string[] = [];
+      if (session.contract_version !== CONTRACT_VERSION) issues.push('旧版会话');
+      if (errors) issues.push('理解检验曾答错');
+      if (!row.completed && Date.now() - Date.parse(updated) > 15 * 60 * 1000)
+        issues.push('超过15分钟未更新');
+      if (
+        row.completed &&
+        blocks.length &&
+        finished !== blocks.reduce((n, b) => n + b.total_trials, 0)
+      )
+        issues.push('轮次记录不完整');
+      const completedModules = modules.filter((m) =>
+        m.kind === 'trials'
+          ? events.some(
+              (e) => e.event_type === 'block_completed' && e.payload.block_id === m.block.block_id,
+            )
+          : m.block_ids.every((id) =>
+              questionnaires.some(
+                (e) =>
+                  e.event_type === 'questionnaire_block_submitted' && e.payload.block_id === id,
+              ),
+            ),
+      ).length;
+      return {
+        session_id: session.session_id,
+        reward_code: row.completed ? rewardCode(session.session_id) : null,
+        condition_id: session.group_assignment,
+        configuration_revision: session.configuration_revision ?? 0,
+        assignment_method: session.assignment_method ?? 'legacy',
+        completed: row.completed === 1,
+        created_at: row.created_at,
+        updated_at: updated,
+        device_class: session.metadata.device_class,
+        participation_mode: session.metadata.participation_mode,
+        completed_trials: finished,
+        total_trials: blocks.length ? blocks.reduce((n, b) => n + b.total_trials, 0) : 1,
+        completed_modules: completedModules,
+        total_modules: modules.length,
+        questionnaire_blocks: questionnaires.length,
+        comprehension_errors: errors,
+        formal_points: formalPoints,
+        reward_cny: rate === null ? null : Math.round(formalPoints * rate * 100) / 100,
+        issues,
+      };
+    });
+  }
+  async function handleAdmin(
+    req: IncomingMessage,
+    res: ServerResponse,
+    pathname: string,
+  ): Promise<void> {
+    enforceSameOrigin(req);
+    if (!adminAuthorized(req)) {
+      sendError(res, 401, 'SESSION_EXPIRED', '管理凭证无效');
+      return;
+    }
+    if (req.method === 'GET' && pathname === '/api/admin/config') {
+      sendJson(res, 200, configResponse());
+      return;
+    }
+    if (req.method === 'GET' && pathname === '/api/admin/sessions') {
+      sendJson(res, 200, { sessions: adminSessions() });
+      return;
+    }
+    if (req.method === 'POST' && pathname === '/api/admin/config') {
+      if (req.headers['content-type']?.split(';')[0]?.trim() !== 'application/json')
+        throw new HttpError(415, 'INVALID_EVENT', '需要 application/json');
+      const body = (await readJson(req)) as { expected_revision?: unknown; config?: unknown };
+      const parsed = adminConfigSchema.safeParse(body?.config);
+      if (!parsed.success)
+        throw new HttpError(
+          400,
+          'INVALID_EVENT',
+          parsed.error.issues.map((i) => i.message).join('；'),
+        );
+      const current = activeConfig()?.revision ?? 0;
+      if (body.expected_revision !== current)
+        throw new HttpError(409, 'EVENT_CONFLICT', '配置已在其他页面更新，请刷新配置后重新编辑');
+      db.prepare('INSERT INTO config_revisions(body,created_at) VALUES(?,?)').run(
+        JSON.stringify(parsed.data),
+        new Date().toISOString(),
+      );
+      sendJson(res, 200, configResponse());
+      return;
+    }
+    sendError(res, 404, 'INVALID_EVENT', '未知管理接口');
+  }
+
   /** Rebuilds the seeded adapter by replaying durable events (after restart). */
   const live = new Map<string, Promise<LiveSession>>();
   async function loadLive(row: SessionRow): Promise<LiveSession> {
     const cached = live.get(row.session_id);
     if (cached) return cached;
     const session = JSON.parse(row.session_json) as Session;
+    if (session.contract_version !== CONTRACT_VERSION)
+      throw new HttpError(
+        409,
+        'INVALID_EVENT',
+        '此会话使用旧版流程，旧记录仍保留。请开始新版体验。',
+      );
     const adapter = createOneTrialPreview({
       adviceForSelf: false,
       requireConsentVersion: row.consent_version,
       requirePractice: practiceRequired,
       performanceReference,
+      privateSeed: row.private_seed,
       seedSession: session,
     });
     const credential: EntryCredential = {
@@ -253,14 +455,27 @@ export function createCollectionServer(options: CollectionServerOptions): Collec
       },
     };
     await adapter.sessionService.openSession(credential);
+    const access = stmtAccess.all(row.session_id) as {
+      trial_id: string;
+      advice_loaded: number;
+      feedback_loaded: number;
+    }[];
+    const loadedAdvice = (id: string) =>
+      session.experiment_plan
+        ? access.some((a) => a.trial_id === id && a.advice_loaded === 1)
+        : row.advice_loaded === 1;
+    const loadedFeedback = (id: string) =>
+      session.experiment_plan
+        ? access.some((a) => a.trial_id === id && a.feedback_loaded === 1)
+        : row.feedback_loaded === 1;
     const stored = stmtListEvents.all(row.session_id) as { body: string }[];
     for (const record of stored) {
       const event = JSON.parse(record.body) as EventEnvelope;
-      if (event.event_type === 'advice_revealed' && row.advice_loaded === 1) {
-        await adapter.trialService.loadAdvice(session, PREVIEW_TRIAL_ID);
+      if (event.event_type === 'advice_revealed' && loadedAdvice(event.trial_id ?? '')) {
+        await adapter.trialService.loadAdvice(session, event.trial_id ?? '');
       }
-      if (event.event_type === 'feedback_presented' && row.feedback_loaded === 1) {
-        await adapter.trialService.getFeedback(session, PREVIEW_TRIAL_ID);
+      if (event.event_type === 'feedback_presented' && loadedFeedback(event.trial_id ?? '')) {
+        await adapter.trialService.getFeedback(session, event.trial_id ?? '');
       }
       const replayed = await adapter.resultStore.saveEvents(session, [event]);
       if (replayed.rejected_events.length > 0) {
@@ -273,8 +488,13 @@ export function createCollectionServer(options: CollectionServerOptions): Collec
         });
       }
     }
-    if (row.advice_loaded === 1) await adapter.trialService.loadAdvice(session, PREVIEW_TRIAL_ID);
-    if (row.feedback_loaded === 1)
+    for (const a of access) {
+      if (a.advice_loaded) await adapter.trialService.loadAdvice(session, a.trial_id);
+      if (a.feedback_loaded) await adapter.trialService.getFeedback(session, a.trial_id);
+    }
+    if (!session.experiment_plan && row.advice_loaded === 1)
+      await adapter.trialService.loadAdvice(session, PREVIEW_TRIAL_ID);
+    if (!session.experiment_plan && row.feedback_loaded === 1)
       await adapter.trialService.getFeedback(session, PREVIEW_TRIAL_ID);
     if (row.completed === 1) await adapter.sessionService.finishSession(session);
     const value: LiveSession = { adapter, session };
@@ -298,11 +518,12 @@ export function createCollectionServer(options: CollectionServerOptions): Collec
   }
 
   const creationLimit = new Map<string, { count: number; resetAt: number }>();
-  function rateLimited(ip: string): boolean {
+  const validationLimit = new Map<string, { count: number; resetAt: number }>();
+  function rateLimited(ip: string, bucket = creationLimit): boolean {
     const now = Date.now();
-    const entry = creationLimit.get(ip);
+    const entry = bucket.get(ip);
     if (!entry || entry.resetAt <= now) {
-      creationLimit.set(ip, { count: 1, resetAt: now + 60_000 });
+      bucket.set(ip, { count: 1, resetAt: now + 60_000 });
       return false;
     }
     entry.count += 1;
@@ -499,11 +720,23 @@ export function createCollectionServer(options: CollectionServerOptions): Collec
     const events = liveSession?.adapter.exportEvents() ?? storedEvents;
     const hasFinal = events.some((event) => event.event_type === 'final_prediction_submitted');
     let feedback: TrialFeedback | null = null;
+    const feedbacks: TrialFeedback[] = [];
     if (hasFinal && liveSession) {
-      feedback = await liveSession.adapter.trialService.getFeedback(
-        liveSession.session,
-        PREVIEW_TRIAL_ID,
-      );
+      for (const e of events)
+        if (e.event_type === 'final_prediction_submitted' && e.trial_id) {
+          const result = await liveSession.adapter.trialService.getFeedback(
+            liveSession.session,
+            e.trial_id,
+          );
+          feedbacks.push(result);
+          stmtFeedbackAccess.run(row.session_id, e.trial_id, JSON.stringify(result));
+        }
+      feedback = feedbacks.at(-1) ?? null;
+    } else if (session.experiment_plan) {
+      const saved = stmtAccess.all(row.session_id) as { feedback_json: string | null }[];
+      for (const item of saved)
+        if (item.feedback_json) feedbacks.push(JSON.parse(item.feedback_json) as TrialFeedback);
+      feedback = feedbacks.at(-1) ?? null;
     } else if (hasFinal) {
       const independent = events.find((event) => event.event_type === 'prediction_submitted');
       const final = events.find((event) => event.event_type === 'final_prediction_submitted');
@@ -535,6 +768,36 @@ export function createCollectionServer(options: CollectionServerOptions): Collec
         };
       }
     }
+    if (!feedbacks.length && feedback) feedbacks.push(feedback);
+    const planned = session.experiment_plan?.modules.flatMap((m) =>
+      m.kind === 'trials'
+        ? trialIds(m.block).map((id, i) => ({ id, index: i, block: m.block }))
+        : [],
+    ) ?? [{ id: PREVIEW_TRIAL_ID, index: 0, block: null }];
+    const trialResults = planned
+      .filter((t) => events.some((e) => e.trial_id === t.id))
+      .map((t) => {
+        const perTrial = events.filter((e) => e.trial_id === t.id);
+        const prediction = perTrial.find((e) => e.event_type === 'prediction_submitted');
+        const final = perTrial.find((e) => e.event_type === 'final_prediction_submitted');
+        const source = perTrial.find((e) => e.event_type === 'source_selected');
+        const confidence = perTrial.find((e) => e.event_type === 'confidence_submitted');
+        return {
+          trial_id: t.id,
+          block_id: t.block?.block_id ?? 'legacy',
+          block_kind: t.block?.block_kind ?? 'formal',
+          trial_index_in_block: t.index,
+          scores_excluded_from_formal: t.block?.scores_excluded_from_formal ?? false,
+          condition_assignment: session.condition_assignment,
+          independent: prediction?.payload.machine_id ?? null,
+          final: final?.payload.machine_id ?? null,
+          source: source?.payload.source ?? null,
+          confidence: confidence?.payload.confidence_percent ?? null,
+          feedback: feedbacks.find((f) => f.trial_id === t.id) ?? null,
+          feedback_presented: perTrial.some((e) => e.event_type === 'feedback_presented'),
+          event_count: perTrial.length,
+        };
+      });
     const auditRows = stmtListAudit.all(row.session_id) as { body: string }[];
     return {
       session,
@@ -543,6 +806,9 @@ export function createCollectionServer(options: CollectionServerOptions): Collec
       completed: row.completed === 1,
       presentation_audit: auditRows.map((record) => JSON.parse(record.body) as AuditRecordInput),
       feedback,
+      feedbacks,
+      trial_results: trialResults,
+      reward_code: row.completed === 1 ? rewardCode(session.session_id) : null,
     };
   }
 
@@ -565,16 +831,32 @@ export function createCollectionServer(options: CollectionServerOptions): Collec
       return;
     }
 
-    if (method === 'POST' && pathname === '/api/session') {
-      if (rateLimited(req.socket.remoteAddress ?? 'unknown')) {
-        sendError(res, 429, 'RATE_LIMITED', '会话创建过于频繁');
+    // Validate before consent without creating a participant, cookie or experiment data.
+    // Separate quota avoids consuming the admission allowance for a 50-person batch.
+    if (method === 'POST' && pathname === '/api/entry/validate') {
+      if (rateLimited(req.socket.remoteAddress ?? 'unknown', validationLimit)) {
+        sendError(res, 429, 'RATE_LIMITED', '验证过于频繁，请稍后重试');
         return;
       }
+      const body = (await readJson(req)) as { entry_code?: unknown } | null;
+      if (typeof body?.entry_code !== 'string' || body.entry_code !== options.entryCode) {
+        sendError(res, 403, 'INVALID_ENTRY_CODE', '参与码无效，请检查后重新输入。');
+        return;
+      }
+      sendJson(res, 200, { valid: true });
+      return;
+    }
+
+    if (method === 'POST' && pathname === '/api/session') {
       const existing = requireAuth(req);
       if (existing) {
         // Existing authenticated cookie resumes the session, preserving events.
         const liveSession = await loadLive(existing);
         sendJson(res, 200, snapshot(existing, liveSession));
+        return;
+      }
+      if (rateLimited(req.socket.remoteAddress ?? 'unknown')) {
+        sendError(res, 429, 'RATE_LIMITED', '会话创建过于频繁');
         return;
       }
       const body = (await readJson(req)) as { credential?: unknown; entry?: unknown };
@@ -594,12 +876,21 @@ export function createCollectionServer(options: CollectionServerOptions): Collec
           retryable: 'no-retry',
         });
       }
+      const assignedConfig = activeConfig();
+      const choices = assignedConfig?.config.conditions ?? [performanceReference];
+      const assigned = choices[randomInt(choices.length)] ?? performanceReference;
+      const privateSeed = randomBytes(32).toString('hex');
       const adapter = createOneTrialPreview({
         adviceForSelf: false,
         requireConsentVersion: entry.consent_version,
         requirePractice: practiceRequired,
-        performanceReference,
+        performanceReference: assigned,
+        plan: assignedConfig?.config.plan ?? configuredPlan,
+        privateSeed,
         seedSession: {
+          configuration_revision: assignedConfig?.revision ?? 0,
+          assignment_method: choices.length > 1 ? 'equal_random' : 'single',
+          questionnaire_validation_version: '1.0.0',
           participant_id: randomUUID(),
           recruitment_batch: 'collection-pilot',
           metadata: {
@@ -627,6 +918,7 @@ export function createCollectionServer(options: CollectionServerOptions): Collec
         entry.consent_version,
         sha256(token).toString('hex'),
         createdAt,
+        privateSeed,
       );
       const row = sessionRowFrom(stmtFindById.get(session.session_id));
       live.set(session.session_id, Promise.resolve({ adapter, session }));
@@ -648,6 +940,8 @@ export function createCollectionServer(options: CollectionServerOptions): Collec
       return;
     }
 
+    const trialId =
+      new URL(req.url ?? '/', 'http://localhost').searchParams.get('trial_id') ?? PREVIEW_TRIAL_ID;
     switch (`${method} ${pathname}`) {
       case 'GET /api/session': {
         const liveSession = await loadLive(row);
@@ -658,7 +952,7 @@ export function createCollectionServer(options: CollectionServerOptions): Collec
         const liveSession = await loadLive(row);
         const trial = await liveSession.adapter.trialService.loadTrial(
           liveSession.session,
-          PREVIEW_TRIAL_ID,
+          trialId,
         );
         sendJson(res, 200, trial);
         return;
@@ -667,8 +961,9 @@ export function createCollectionServer(options: CollectionServerOptions): Collec
         const liveSession = await loadLive(row);
         const advice = await liveSession.adapter.trialService.loadAdvice(
           liveSession.session,
-          PREVIEW_TRIAL_ID,
+          trialId,
         );
+        stmtAdviceAccess.run(row.session_id, trialId);
         if (row.advice_loaded !== 1) {
           stmtUpdateFlags.run(1, row.feedback_loaded, row.session_id);
         }
@@ -679,8 +974,9 @@ export function createCollectionServer(options: CollectionServerOptions): Collec
         const liveSession = await loadLive(row);
         const feedback = await liveSession.adapter.trialService.getFeedback(
           liveSession.session,
-          PREVIEW_TRIAL_ID,
+          trialId,
         );
+        stmtFeedbackAccess.run(row.session_id, trialId, JSON.stringify(feedback));
         if (row.feedback_loaded !== 1) {
           stmtUpdateFlags.run(row.advice_loaded, 1, row.session_id);
         }
@@ -921,7 +1217,10 @@ export function createCollectionServer(options: CollectionServerOptions): Collec
       sendError(res, 401, 'SESSION_EXPIRED', '管理凭证无效');
       return;
     }
-    const rows = stmtListSessions.all() as unknown as SessionRow[];
+    const selected = query.get('session_ids')?.split(',');
+    const rows = (stmtListSessions.all() as unknown as SessionRow[]).filter(
+      (row) => !selected || selected.includes(row.session_id),
+    );
     const shapes = await Promise.all(rows.map((row) => exportShape(row)));
     if (query.get('format') === 'csv') {
       const header = [
@@ -957,63 +1256,117 @@ export function createCollectionServer(options: CollectionServerOptions): Collec
         'independent_matches_advice',
         'final_matches_advice',
         'switched_to_advice',
+        'trial_id',
+        'block_id',
+        'block_kind',
+        'trial_index_in_block',
+        'scores_excluded_from_formal',
+        'plan_version',
+        'configuration_revision',
+        'assignment_method',
+        'reward_code',
+        'comprehension_error_count',
       ];
       const lines = [header.join(',')];
-      for (const shape of shapes) {
-        const independent = shape.events.find((e) => e.event_type === 'prediction_submitted');
-        const final = shape.events.find((e) => e.event_type === 'final_prediction_submitted');
-        const source = shape.events.find((e) => e.event_type === 'source_selected');
-        const confidence = shape.events.find((e) => e.event_type === 'confidence_submitted');
-        const practice = shape.events.find((e) => e.event_type === 'practice_completed');
-        const evaluation = shape.feedback?.advice_evaluation;
-        const assigned = shape.session.condition_assignment ?? performanceReference;
-        const practicePoints =
-          practice?.event_type === 'practice_completed' ? practice.payload.total_points : 0;
-        const mainPoints = shape.feedback?.points_awarded ?? 0;
-        const rewardRate =
-          practice?.event_type === 'practice_completed'
-            ? practice.payload.reward_per_point_cny
-            : performanceReference.reward_per_point_cny;
-        lines.push(
-          [
-            csvCell(shape.session.session_id),
-            csvCell(shape.session.participant_id),
-            csvCell(shape.session.metadata.participation_mode),
-            csvCell(shape.session.metadata.device_class),
-            csvCell(shape.session.recruitment_batch),
-            csvCell(shape.session.group_assignment),
-            csvCell(assigned.human_average_hit_rate),
-            csvCell(assigned.ai_hit_rate),
-            csvCell(assigned.ai_accuracy_tier),
-            csvCell(shape.entry.consent_version),
-            csvCell(shape.events.length),
-            csvCell(shape.presentation_audit.length),
-            csvCell(shape.completed),
-            csvCell(independent ? (independent.payload as { machine_id?: string }).machine_id : ''),
-            csvCell(final ? (final.payload as { machine_id?: string }).machine_id : ''),
-            csvCell(shape.feedback ? shape.feedback.actual_winner_machine_id : ''),
-            csvCell(shape.feedback ? shape.feedback.independent_correct : ''),
-            csvCell(shape.feedback ? shape.feedback.final_correct : ''),
-            csvCell(shape.feedback ? shape.feedback.points_awarded : ''),
-            csvCell(practicePoints),
-            csvCell(practicePoints + mainPoints),
-            csvCell(rewardRate),
-            csvCell(rewardRate === null ? '' : (practicePoints + mainPoints) * rewardRate),
-            csvCell(
-              shape.session
-                ? (rows.find((r) => r.session_id === shape.session.session_id)?.created_at ?? '')
-                : '',
-            ),
-            csvCell(source?.payload.source),
-            csvCell(confidence?.payload.confidence_percent),
-            csvCell(evaluation?.advice_exposed),
-            csvCell(evaluation?.advice_target_machine_id),
-            csvCell(evaluation?.advice_correct),
-            csvCell(evaluation?.independent_matches_advice),
-            csvCell(evaluation?.final_matches_advice),
-            csvCell(evaluation?.switched_to_advice),
-          ].join(','),
-        );
+      for (const bundle of shapes) {
+        const results = bundle.trial_results.length ? bundle.trial_results : [null];
+        for (const trial of results) {
+          const shape = {
+            ...bundle,
+            feedback: trial?.feedback ?? null,
+            events: trial
+              ? bundle.events.filter((e) => !e.trial_id || e.trial_id === trial.trial_id)
+              : bundle.events,
+          };
+          const independent = shape.events.find((e) => e.event_type === 'prediction_submitted');
+          const final = shape.events.find((e) => e.event_type === 'final_prediction_submitted');
+          const source = shape.events.find((e) => e.event_type === 'source_selected');
+          const confidence = shape.events.find((e) => e.event_type === 'confidence_submitted');
+          const practice = shape.events.find((e) => e.event_type === 'practice_completed');
+          const evaluation = shape.feedback?.advice_evaluation;
+          const assigned = shape.session.condition_assignment ?? performanceReference;
+          const practicePoints = bundle.session.experiment_plan
+            ? bundle.trial_results
+                .filter((t) => t.scores_excluded_from_formal)
+                .reduce((n, t) => n + (t.feedback?.points_awarded ?? 0), 0)
+            : practice?.event_type === 'practice_completed'
+              ? practice.payload.total_points
+              : 0;
+          const mainPoints = bundle.trial_results
+            .filter((t) => !t.scores_excluded_from_formal)
+            .reduce((n, t) => n + (t.feedback?.points_awarded ?? 0), 0);
+          const rewardPoints = bundle.session.experiment_plan
+            ? mainPoints
+            : practicePoints + mainPoints;
+          const rewardRate =
+            practice?.event_type === 'practice_completed'
+              ? practice.payload.reward_per_point_cny
+              : assigned.reward_per_point_cny;
+          lines.push(
+            [
+              csvCell(shape.session.session_id),
+              csvCell(shape.session.participant_id),
+              csvCell(shape.session.metadata.participation_mode),
+              csvCell(shape.session.metadata.device_class),
+              csvCell(shape.session.recruitment_batch),
+              csvCell(shape.session.group_assignment),
+              csvCell(assigned.human_average_hit_rate),
+              csvCell(assigned.ai_hit_rate),
+              csvCell(assigned.ai_accuracy_tier),
+              csvCell(shape.entry.consent_version),
+              csvCell(shape.events.length),
+              csvCell(shape.presentation_audit.length),
+              csvCell(shape.completed),
+              csvCell(
+                independent ? (independent.payload as { machine_id?: string }).machine_id : '',
+              ),
+              csvCell(final ? (final.payload as { machine_id?: string }).machine_id : ''),
+              csvCell(shape.feedback ? shape.feedback.actual_winner_machine_id : ''),
+              csvCell(shape.feedback ? shape.feedback.independent_correct : ''),
+              csvCell(shape.feedback ? shape.feedback.final_correct : ''),
+              csvCell(shape.feedback ? shape.feedback.points_awarded : ''),
+              csvCell(practicePoints),
+              csvCell(rewardPoints),
+              csvCell(rewardRate),
+              csvCell(rewardRate === null ? '' : rewardPoints * rewardRate),
+              csvCell(
+                shape.session
+                  ? (rows.find((r) => r.session_id === shape.session.session_id)?.created_at ?? '')
+                  : '',
+              ),
+              csvCell(source?.payload.source),
+              csvCell(confidence?.payload.confidence_percent),
+              csvCell(evaluation?.advice_exposed),
+              csvCell(evaluation?.advice_target_machine_id),
+              csvCell(evaluation?.advice_correct),
+              csvCell(evaluation?.independent_matches_advice),
+              csvCell(evaluation?.final_matches_advice),
+              csvCell(evaluation?.switched_to_advice),
+              csvCell(trial?.trial_id),
+              csvCell(trial?.block_id),
+              csvCell(trial?.block_kind),
+              csvCell(trial?.trial_index_in_block),
+              csvCell(trial?.scores_excluded_from_formal),
+              csvCell(bundle.session.experiment_plan?.version),
+              csvCell(bundle.session.configuration_revision),
+              csvCell(bundle.session.assignment_method),
+              csvCell(bundle.reward_code),
+              csvCell(
+                bundle.events.reduce(
+                  (n, e) =>
+                    n +
+                    (e.event_type === 'questionnaire_block_submitted'
+                      ? (e.payload.comprehension_errors ?? []).reduce(
+                          (a, b) => a + b.incorrect_count,
+                          0,
+                        )
+                      : 0),
+                  0,
+                ),
+              ),
+            ].join(','),
+          );
+        }
       }
       res.writeHead(200, {
         'content-type': 'text/csv; charset=utf-8',
@@ -1102,6 +1455,10 @@ export function createCollectionServer(options: CollectionServerOptions): Collec
             return;
           }
           await handleAdminExport(req, res, url.searchParams);
+          return;
+        }
+        if (pathname.startsWith('/api/admin/')) {
+          await handleAdmin(req, res, pathname);
           return;
         }
         if (pathname === '/api' || pathname.startsWith('/api/')) {

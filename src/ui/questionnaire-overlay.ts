@@ -7,10 +7,15 @@ import type {
   QuestionnaireResponseValue,
 } from '../domain/questionnaire.js';
 import { blocksAt } from '../domain/questionnaire.js';
+import {
+  answerError,
+  validateQuestionnaireSubmission,
+} from '../domain/questionnaire-validation.js';
 import { requireElement } from './atelier/dom.js';
 import './questionnaire.css';
 
 export interface QuestionnaireMountOptions {
+  readonly draftSessionId?: string;
   readonly isSubmitted: (blockId: string) => boolean;
   readonly submit: (payload: QuestionnaireBlockPayload) => Promise<void>;
 }
@@ -54,21 +59,121 @@ async function mountBlock(
   instrument: QuestionnaireInstrument,
   block: QuestionnaireBlock,
   submit: (payload: QuestionnaireBlockPayload) => Promise<void>,
+  draftKey?: string,
 ): Promise<void> {
-  const questions = block.randomizeQuestions ? shuffled(block.questions) : [...block.questions];
+  type Draft = {
+    order: string[];
+    values: Record<string, QuestionnaireResponseValue>;
+    times: Record<string, number>;
+    errors: Record<string, number>;
+    elapsed: number;
+    pending: QuestionnaireBlockPayload | null;
+  };
+  let draft: Draft | null = null;
+  let storage: Storage | null = null;
+  if (draftKey)
+    try {
+      storage = sessionStorage;
+      const raw = storage.getItem(draftKey);
+      if (raw) {
+        const d = JSON.parse(raw) as Draft;
+        const ids = block.questions.map((q) => q.id);
+        if (
+          Array.isArray(d.order) &&
+          d.order.length === ids.length &&
+          new Set(d.order).size === ids.length &&
+          d.order.every((id) => ids.includes(id)) &&
+          d.values &&
+          d.times &&
+          d.errors &&
+          Number.isFinite(d.elapsed) &&
+          d.elapsed >= 0
+        ) {
+          if (d.pending) validateQuestionnaireSubmission(instrument, d.pending);
+          draft = d;
+        }
+      }
+    } catch {
+      draft = null;
+    }
+  const questions = draft
+    ? draft.order.map((id) => block.questions.find((q) => q.id === id) as QuestionnaireQuestion)
+    : block.randomizeQuestions
+      ? shuffled(block.questions)
+      : [...block.questions];
   const shownAt = performance.now();
-  const answeredAt = new Map<string, number>();
-  const values = new Map<string, QuestionnaireResponseValue>();
+  const elapsed = () => (draft?.elapsed ?? 0) + Math.round(performance.now() - shownAt);
+  const answeredAt = new Map<string, number>(Object.entries(draft?.times ?? {}));
+  const values = new Map<string, QuestionnaireResponseValue>(Object.entries(draft?.values ?? {}));
+  const errors = new Map<string, number>(Object.entries(draft?.errors ?? {}));
+  let pending = draft?.pending ?? null;
+  const persist = () => {
+    if (!storage || !draftKey) return;
+    try {
+      storage.setItem(
+        draftKey,
+        JSON.stringify({
+          order: questions.map((q) => q.id),
+          values: Object.fromEntries(values),
+          times: Object.fromEntries(answeredAt),
+          errors: Object.fromEntries(errors),
+          elapsed: elapsed(),
+          pending,
+        }),
+      );
+    } catch {
+      storage = null;
+    }
+  };
   const overlay = document.createElement('section');
   overlay.className = 'questionnaire-overlay';
   overlay.dataset.blockId = block.id;
   overlay.setAttribute('aria-label', instrument.title);
   overlay.innerHTML = `<div class="questionnaire-shell"><header><a class="wordmark" href="./index.html"><span class="brand-mark">p.</span> PREDICTION LAB</a><span>研究问卷</span></header><main><p class="eyebrow">${block.eyebrow}</p><h1>${block.title}</h1>${block.intro ? `<p class="questionnaire-intro">${block.intro}</p>` : ''}<form novalidate><div class="questionnaire-items">${questions.map(renderQuestion).join('')}</div><p class="questionnaire-form-error" role="alert"></p><button type="submit" class="primary">${block.submitLabel}<span>→</span></button></form></main><footer>题项版本 ${instrument.version} · ${instrument.wordingProfile}</footer></div>`;
   root.append(overlay);
+  const draftStatus = document.createElement('p');
+  draftStatus.className = 'questionnaire-draft-status';
+  const showDraftStatus = () => {
+    draftStatus.textContent = storage
+      ? draft
+        ? '已恢复本标签页草稿；提交后才保存至服务器。'
+        : '本标签页自动保留草稿；提交后才保存至服务器。'
+      : '未启用草稿保存，请完成本页后提交。';
+  };
+  requireElement(overlay, 'form').prepend(draftStatus);
+  persist();
+  showDraftStatus();
+  const onHide = () => persist();
+  window.addEventListener('pagehide', onHide);
+  document.addEventListener('visibilitychange', onHide);
+  for (const q of questions) {
+    const value = values.get(q.id);
+    if (value === undefined || value === null) continue;
+    overlay
+      .querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(`[data-question-id="${q.id}"]`)
+      .forEach((input) => {
+        if (input instanceof HTMLInputElement && input.type === 'radio')
+          input.checked = String(value) === input.value;
+        else input.value = String(value);
+      });
+    if (q.kind === 'slider')
+      requireElement(overlay, `[data-value-for="${q.id}"]`).textContent =
+        String(value) + (q.valueSuffix ?? '');
+  }
+  const lockAnswers = () => {
+    overlay
+      .querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input,textarea')
+      .forEach((input) => {
+        input.disabled = pending !== null;
+      });
+  };
+  lockAnswers();
 
   const setValue = (id: string, value: QuestionnaireResponseValue): void => {
     values.set(id, value);
-    answeredAt.set(id, Math.max(0, Math.round(performance.now() - shownAt)));
+    answeredAt.set(id, Math.max(0, elapsed()));
+    persist();
+    showDraftStatus();
     requireElement<HTMLElement>(overlay, `[data-item-id="${id}"]`).classList.remove('invalid');
     requireElement<HTMLElement>(
       overlay,
@@ -76,7 +181,11 @@ async function mountBlock(
     ).textContent = '';
   };
   overlay.querySelectorAll<HTMLInputElement>('input[type="radio"]').forEach((input) => {
-    input.addEventListener('change', () => setValue(input.dataset.questionId ?? '', input.value));
+    input.addEventListener('change', () => {
+      const id = input.dataset.questionId ?? '';
+      const question = questions.find((q) => q.id === id);
+      setValue(id, question?.kind === 'likert' ? Number(input.value) : input.value);
+    });
   });
   overlay.querySelectorAll<HTMLInputElement>('input[type="range"]').forEach((input) => {
     input.addEventListener('input', () => {
@@ -103,24 +212,21 @@ async function mountBlock(
           const item = requireElement<HTMLElement>(overlay, `[data-item-id="${question.id}"]`);
           const error = requireElement<HTMLElement>(item, '.questionnaire-item-error');
           const value = values.get(question.id);
-          const missing =
-            value === undefined ||
-            value === null ||
-            (typeof value === 'string' && value.trim() === '');
-          if (question.required && missing) {
+          const message = answerError(question, value);
+          if (message) {
             valid = false;
             item.classList.add('invalid');
-            error.textContent = '请完成这一题。';
-          } else if (
-            question.kind === 'single_choice' &&
-            question.correctAnswer !== undefined &&
-            value !== question.correctAnswer
-          ) {
-            valid = false;
-            item.classList.add('invalid');
-            error.textContent = question.incorrectFeedback ?? '请重新检查任务说明。';
+            error.textContent = message;
+            if (
+              question.kind === 'single_choice' &&
+              question.correctAnswer !== undefined &&
+              typeof value === 'string' &&
+              value !== question.correctAnswer
+            )
+              errors.set(question.id, (errors.get(question.id) ?? 0) + 1);
           }
         }
+        persist();
         if (!valid) {
           requireElement<HTMLElement>(overlay, '.questionnaire-form-error').textContent =
             '还有题目需要检查。';
@@ -133,11 +239,15 @@ async function mountBlock(
         button.disabled = true;
         requireElement<HTMLElement>(overlay, '.questionnaire-form-error').textContent = '';
         try {
-          await submit({
+          pending ??= {
             block_id: block.id,
             instrument_version: instrument.version,
             wording_profile: instrument.wordingProfile,
             position: block.position,
+            comprehension_errors: [...errors].map(([item_id, incorrect_count]) => ({
+              item_id,
+              incorrect_count,
+            })),
             item_order: questions.map((question) => question.id),
             responses: questions.map((question) => {
               const value = values.get(question.id);
@@ -149,10 +259,21 @@ async function mountBlock(
                 item_id: question.id,
                 value: skipped ? null : (value ?? null),
                 skipped,
-                response_ms: answeredAt.get(question.id) ?? Math.round(performance.now() - shownAt),
+                response_ms: answeredAt.get(question.id) ?? elapsed(),
               };
             }),
-          });
+          };
+          persist();
+          lockAnswers();
+          await submit(pending);
+          if (storage && draftKey)
+            try {
+              storage.removeItem(draftKey);
+            } catch {
+              /* Optional local drafts. */
+            }
+          window.removeEventListener('pagehide', onHide);
+          document.removeEventListener('visibilitychange', onHide);
           overlay.remove();
           resolve();
         } catch (error) {
@@ -172,6 +293,16 @@ export async function mountQuestionnaireSequence(
   options: QuestionnaireMountOptions,
 ): Promise<void> {
   for (const block of blocksAt(instrument, position)) {
-    if (!options.isSubmitted(block.id)) await mountBlock(root, instrument, block, options.submit);
+    const key = options.draftSessionId
+      ? `paper2.questionnaire.v1:${options.draftSessionId}:${instrument.version}:${block.id}`
+      : undefined;
+    if (!options.isSubmitted(block.id))
+      await mountBlock(root, instrument, block, options.submit, key);
+    else if (key)
+      try {
+        sessionStorage.removeItem(key);
+      } catch {
+        /* Optional local drafts. */
+      }
   }
 }

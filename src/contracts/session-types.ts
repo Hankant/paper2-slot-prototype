@@ -1,3 +1,4 @@
+import type { ExperimentPlan } from './experiment-plan.js';
 /**
  * Session-shape types (see docs/CONTRACTS.md §1 and §2).
  *
@@ -22,6 +23,10 @@ export interface Session {
   readonly contract_version: SemverTag;
   readonly adapter_version: string;
   readonly provider: string;
+  readonly configuration_revision?: number;
+  readonly assignment_method?: 'single' | 'equal_random';
+  readonly questionnaire_validation_version?: '1.0.0';
+  readonly experiment_plan?: ExperimentPlan;
   readonly condition_assignment?: PerformanceReference;
   readonly metadata: SessionMetadata;
 }

@@ -68,6 +68,8 @@ export interface RemoteExport {
   readonly entry: unknown;
   readonly presentation_audit: AuditRecord[];
   readonly feedback: TrialFeedback | null;
+  readonly feedbacks: TrialFeedback[];
+  readonly trial_results: unknown[];
 }
 
 export interface RemoteAdapterOptions {
@@ -85,6 +87,7 @@ export interface RemoteAdapterOptions {
 }
 
 export type RemoteAdapter = ExperimentAdapter & {
+  validateEntryCode(code: string): Promise<void>;
   snapshot(): Promise<RemoteSnapshot>;
   export(): Promise<RemoteExport>;
   saveAudit(records: ReadonlyArray<AuditRecord>): Promise<AuditAck>;
@@ -210,6 +213,10 @@ function parseExport(payload: unknown): RemoteExport {
     events: Array.isArray(raw.events) ? raw.events.map((e) => parseEventEnvelope(e)) : [],
     entry: raw.entry ?? null,
     presentation_audit: audit.map(parseAuditRecord),
+    feedbacks: Array.isArray(raw.feedbacks)
+      ? raw.feedbacks.map((f) => trialFeedbackSchema.parse(f) as TrialFeedback)
+      : [],
+    trial_results: Array.isArray(raw.trial_results) ? raw.trial_results : [],
     feedback:
       raw.feedback === null ? null : (trialFeedbackSchema.parse(raw.feedback) as TrialFeedback),
   };
@@ -366,6 +373,11 @@ export function createRemoteAdapter(options: RemoteAdapterOptions = {}): RemoteA
   let lastSnapshot: RemoteSnapshot | null = null;
 
   const adapter: RemoteAdapter = {
+    async validateEntryCode(code) {
+      const result = await request('POST', '/api/entry/validate', { entry_code: code });
+      if (!result || typeof result !== 'object' || (result as { valid?: unknown }).valid !== true)
+        throw new Error('未收到参与码验证结果，请重试。');
+    },
     async snapshot() {
       lastSnapshot = parseSnapshot(await request('GET', '/api/session'));
       bindSession(lastSnapshot.session.session_id);
@@ -467,24 +479,25 @@ export function createRemoteAdapter(options: RemoteAdapterOptions = {}): RemoteA
     trialService: {
       async loadTrial(session: Session, trialId: string): Promise<PublicTrial> {
         void session;
-        void trialId;
-        return publicTrialSchema.parse(await request('GET', '/api/trial')) as PublicTrial;
+        return publicTrialSchema.parse(
+          await request('GET', '/api/trial?trial_id=' + encodeURIComponent(trialId)),
+        ) as PublicTrial;
       },
 
       async loadAdvice(session: Session, trialId: string): Promise<RevealedAdviceBlock> {
         void session;
-        void trialId;
         // A hidden (not-yet-revealed) block fails this strict schema, which is
         // exactly the gating the UI relies on.
         return revealedAdviceBlockSchema.parse(
-          await request('GET', '/api/advice'),
+          await request('GET', '/api/advice?trial_id=' + encodeURIComponent(trialId)),
         ) as RevealedAdviceBlock;
       },
 
       async getFeedback(session: Session, trialId: string): Promise<TrialFeedback> {
         void session;
-        void trialId;
-        return trialFeedbackSchema.parse(await request('GET', '/api/feedback')) as TrialFeedback;
+        return trialFeedbackSchema.parse(
+          await request('GET', '/api/feedback?trial_id=' + encodeURIComponent(trialId)),
+        ) as TrialFeedback;
       },
     },
 

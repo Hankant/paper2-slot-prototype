@@ -20,14 +20,14 @@ export interface EntryMaterialShape {
 }
 
 export const COLLECTION_MATERIAL: EntryMaterialShape = {
-  consentVersion: 'collect-consent-2026-09-22-v2',
-  instructionsVersion: 'collect-instructions-2026-09-22-v2',
+  consentVersion: 'collect-consent-2026-09-23-v3',
+  instructionsVersion: 'collect-instructions-2026-09-23-v3',
   title: '预测任务参与知情同意书',
   status: '研究试运行',
   sections: [
     {
       title: '参与内容',
-      text: '本任务关注人们如何根据历史信息和 AI 助手建议做出预测。你将先完成试玩，再从三台机器中预测本轮实际中奖的一台，报告信心，并在查看参考建议后确认最终答案。每轮只有一台机器中奖。',
+      text: '本任务关注人们如何根据历史信息和 AI 助手建议做出预测。任务包含试玩、问卷与多轮正式预测。每轮从三台机器中预测本轮实际中奖的一台，报告信心，并在查看参考建议后确认最终答案。每轮只有一台机器中奖。',
     },
     {
       title: '自愿参与与退出',
@@ -43,7 +43,7 @@ export const COLLECTION_MATERIAL: EntryMaterialShape = {
     },
     {
       title: '体验与报酬',
-      text: '任务可能带来短暂的犹豫或答错后的挫败感，不适时可停止。预测正确将获得积分；总积分用于计算任务奖励，具体兑换规则以研究现场说明为准。',
+      text: '任务可能带来短暂的犹豫或答错后的挫败感，不适时可停止。预测正确将获得积分；正式积分用于计算任务奖励；试玩不显示积分，不计入正式成绩或奖励，具体兑换规则以研究现场说明为准。',
     },
     {
       title: 'AI 助手',
@@ -60,7 +60,7 @@ export const COLLECTION_MATERIAL: EntryMaterialShape = {
   steps: [
     {
       title: '先独立预测',
-      text: '先完成三轮试玩，熟悉“近期开奖占比”、来源命中率和积分规则。正式任务中选择你预测会中奖的机器，并报告 0—100 的预测信心。确认并收到服务器回执后，独立答案锁定。',
+      text: '试玩帮助你熟悉“近期开奖占比”、来源命中率和积分规则。正式任务中选择你预测会中奖的机器，并估计自己本轮预测正确的概率（0%—100%）。确认并收到服务器回执后，独立答案锁定。',
     },
     {
       title: '选择参考来源',
@@ -68,7 +68,7 @@ export const COLLECTION_MATERIAL: EntryMaterialShape = {
     },
     {
       title: '确认并开奖',
-      text: '重新选择并锁定最终预测，再点击拉杆开奖。本任务每轮只有一台机器中奖，最终预测与实际中奖机器相同得 10 积分，否则为 0。完成后可以下载本人记录。',
+      text: '重新选择并锁定最终预测，再点击拉杆开奖。本任务每轮只有一台机器中奖，最终预测与实际中奖机器相同获得页面显示的积分，否则为 0。完成后可以下载本人记录。',
     },
   ],
 };

@@ -13,8 +13,8 @@ import { createCollectionServer } from '../../server/app.js';
 
 const ENTRY_CODE = 'TEST-ENTRY-0001';
 const ADMIN_TOKEN = 'test-admin-token-0123456789abcdef';
-const CONSENT_VERSION = 'collect-consent-2026-09-22-v2';
-const INSTRUCTIONS_VERSION = 'collect-instructions-2026-09-22-v2';
+const CONSENT_VERSION = 'collect-consent-2026-09-23-v3';
+const INSTRUCTIONS_VERSION = 'collect-instructions-2026-09-23-v3';
 const TRIAL_ID = 'preview-trial-1';
 const ADVICE_ID = 'preview-advice-1';
 

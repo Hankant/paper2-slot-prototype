@@ -48,6 +48,12 @@ describe('contracts: publicTrial', () => {
       'trial_id',
       'trial_index',
       'phase',
+      // minimax (2026-09-23): block metadata fields added by the
+      // multi-block orchestrator. They are public (no private seeds).
+      'block_id',
+      'block_kind',
+      'trial_index_in_block',
+      'block_total_trials',
       'visible_history',
       'machines',
       'advice_timing',

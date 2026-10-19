@@ -18,6 +18,8 @@ const settings = JSON.parse(readFileSync(settingsFile, 'utf8')) as {
   humanAverageHitRate?: number;
   aiHitRate?: number;
   aiAccuracyTier?: string;
+  practiceRounds?: number;
+  formalRounds?: number;
   pointsPerCorrect?: number;
   rewardPerPointCny?: number | null;
 };
@@ -34,6 +36,10 @@ for (const [name, addresses] of Object.entries(networkInterfaces())) {
 if (lanUrls.length === 0) throw new Error('没有找到可用的局域网地址，请确认已连接校园网');
 
 Object.assign(process.env, {
+  ...(settings.practiceRounds === undefined
+    ? {}
+    : { PRACTICE_ROUNDS: String(settings.practiceRounds) }),
+  ...(settings.formalRounds === undefined ? {} : { FORMAL_ROUNDS: String(settings.formalRounds) }),
   HOST: '0.0.0.0',
   PORT: String(settings.port),
   DATA_PATH: path.resolve('private/collection/collection.sqlite'),

@@ -247,7 +247,7 @@ test('full AI-branch trial: advice, final answer, feedback and durable finish', 
     'session_completion_requested',
   ]);
   expectNoDuplicateEvents(data.events);
-  expect(data.entry.consent_version).toBe('collect-consent-2026-09-22-v2');
+  expect(data.entry.consent_version).toBe('collect-consent-2026-09-23-v3');
   expect(data.events[1]?.payload).toMatchObject({
     condition_id: 'e2e-human55-ai60',
     human_average_hit_rate: 0.55,

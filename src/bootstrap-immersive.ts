@@ -1,58 +1,34 @@
-import {
-  createOneTrialPreview,
-  PREVIEW_TRIAL_ID,
-} from './adapters/local-demo/one-trial-preview.js';
-import { createScriptedChat } from './adapters/local-chat/scripted-chat.js';
+import { createOneTrialPreview } from './adapters/local-demo/one-trial-preview.js';
 import { ImmersiveRun } from './experiment/immersive-run.js';
-import { mountImmersive } from './ui/preview-immersive.js';
 import { mountEntry } from './ui/atelier/entry-screen.js';
+import { mountExperimentFlow } from './ui/experiment-flow.js';
 import { ENTRY_MATERIAL } from './domain/entry-materials.js';
-import { QUESTIONNAIRE_INSTRUMENT } from './domain/questionnaire-instrument-demo.js';
-import { mountQuestionnaireSequence } from './ui/questionnaire-overlay.js';
-import { mountPractice } from './ui/practice-overlay.js';
-import { requireElement } from './ui/atelier/dom.js';
+import { EXPERIMENT_PLAN } from './domain/experiment-plan.js';
 import { CONTRACT_VERSION } from '@contracts';
 
 mountEntry(async (entry) => {
   const adapter = createOneTrialPreview({
     adviceForSelf: false,
     requireConsentVersion: ENTRY_MATERIAL.consentVersion,
-    requirePractice: true,
+    plan: EXPERIMENT_PLAN,
+    seedSession:{questionnaire_validation_version:'1.0.0'},
   });
-  const root = requireElement(document, '#paper2-immersive-root');
-  function questionnaire(position: 'pre' | 'post'): Promise<void> {
-    return mountQuestionnaireSequence(root, QUESTIONNAIRE_INSTRUMENT, position, {
-      isSubmitted: (blockId) => run.hasQuestionnaireBlock(blockId),
-      submit: (payload) => run.submitQuestionnaireBlock(payload),
-    });
-  }
-  const run: ImmersiveRun = new ImmersiveRun(adapter, PREVIEW_TRIAL_ID, {
-    beforeCompletion: () => questionnaire('post'),
+  const first = EXPERIMENT_PLAN.modules.find((m) => m.kind === 'trials');
+  if (first?.kind !== 'trials') throw new Error('缺少任务模块');
+  const run = new ImmersiveRun(adapter, `${first.block.block_id}-trial-0`, {
+    isLastInSession: () => false,
   });
-  const chat = createScriptedChat((request) => run.authorizeChat(request));
   await run.initialize({ version: entry.consent_version, acceptedAt: entry.accepted_at });
   run.note('entry_completed', entry);
-  if (!run.hasPractice())
-    await mountPractice(root, run.trial.performance_reference, (payload) =>
-      run.submitPractice(payload),
-    );
-  if (!run.restored || run.stage === 'prediction') await questionnaire('pre');
-  mountImmersive(run, chat, () => ({
+  await mountExperimentFlow(run, () => ({
     simulation: true,
     persistence_scope: 'memory',
-    ui_version: 'atelier-2',
     contract_version: CONTRACT_VERSION,
-    questionnaire_instrument: {
-      version: QUESTIONNAIRE_INSTRUMENT.version,
-      wording_profile: QUESTIONNAIRE_INSTRUMENT.wordingProfile,
-    },
-    self_advice: false,
-    entry,
-    entry_material: ENTRY_MATERIAL,
     session: run.session,
-    feedback: run.feedback,
+    entry,
     events: adapter.exportEvents(),
+    feedbacks: [...run.feedbacks.values()],
     presentation_audit: run.audit,
+    points: { practice: run.points(true), formal: run.points(false) },
   }));
-  window.scrollTo(0, 0);
 });

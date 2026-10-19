@@ -95,6 +95,13 @@ export const SUCCESS_PUBLIC_TRIAL: PublicTrial = {
   trial_id: 'trial-001',
   trial_index: 0,
   phase: 'calibration',
+  // minimax (2026-09-23): block metadata defaults for tests that pre-date
+  // the multi-block orchestrator. Tests that need block-aware behaviour
+  // override these fields via trial-level helpers.
+  block_id: 'legacy-block',
+  block_kind: 'formal',
+  trial_index_in_block: 0,
+  block_total_trials: 1,
   visible_history: [
     { trial_id: 'trial-000', machine_id: 'A', observed_hit_rate: 0.34 },
     { trial_id: 'trial-000', machine_id: 'B', observed_hit_rate: 0.5 },
@@ -270,6 +277,13 @@ export const REJECTED_PUBLIC_TRIAL: PublicTrialInput = {
     points_per_correct: 10,
     reward_per_point_cny: null,
   },
+  // minimax (2026-09-23): block fields are now required by PublicTrialInput
+  // (zod `.strict()`). The probability-out-of-range check still fires first,
+  // so this fixture remains the validator-rejection baseline.
+  block_id: 'rejected-block',
+  block_kind: 'formal',
+  trial_index_in_block: 0,
+  block_total_trials: 1,
 };
 
 export const REJECTED_SESSION: SessionInput = {

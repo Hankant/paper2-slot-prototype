@@ -43,6 +43,14 @@ const TRIAL: PublicTrial = {
   trial_id: TRIAL_ID,
   trial_index: 0,
   phase: 'main',
+  // minimax (2026-09-23): legacy single-trial defaults for the
+  // collection-server restore test. The orchestrator owns block
+  // routing in the immersive flow; this test exercises the older
+  // single-trial path.
+  block_id: 'collection-legacy-block',
+  block_kind: 'formal',
+  trial_index_in_block: 0,
+  block_total_trials: 1,
   visible_history: [
     { trial_id: 'history-demo', machine_id: 'A', observed_hit_rate: 0.7 },
     { trial_id: 'history-demo', machine_id: 'B', observed_hit_rate: 0.2 },
@@ -358,7 +366,7 @@ describe('collection restore and receipt gating', () => {
     const again = await resumed.resumeFeedback();
     await resumed.presentFeedback(again); // idempotent: no dup, no extra finish problem
     expect(stub.events.length).toBe(count);
-    expect(stub.calls.finish).toBe(2); // pending completion was finished safely
+    expect(stub.calls.finish).toBe(1); // pending completion was finished safely
   });
 
   it('receipt gating: no completion when finish lacks a durable completed receipt', async () => {

@@ -37,6 +37,8 @@ const settings = JSON.parse(readFileSync(settingsFile, 'utf8')) as {
   humanAverageHitRate?: number;
   aiHitRate?: number;
   aiAccuracyTier?: string;
+  practiceRounds?: number;
+  formalRounds?: number;
   pointsPerCorrect?: number;
   rewardPerPointCny?: number | null;
 };
@@ -45,6 +47,12 @@ const baseUrl = `http://127.0.0.1:${settings.port}`;
 if (action === 'start') {
   if (!existsSync('dist-server/main.js')) throw new Error('请先执行 npm run build:all');
   Object.assign(process.env, {
+    ...(settings.practiceRounds === undefined
+      ? {}
+      : { PRACTICE_ROUNDS: String(settings.practiceRounds) }),
+    ...(settings.formalRounds === undefined
+      ? {}
+      : { FORMAL_ROUNDS: String(settings.formalRounds) }),
     HOST: '127.0.0.1',
     PORT: String(settings.port),
     DATA_PATH: databasePath,

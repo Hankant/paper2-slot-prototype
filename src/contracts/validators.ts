@@ -1,3 +1,4 @@
+import { experimentPlanSchema } from './experiment-plan.js';
 /**
  * Runtime validators for the public envelope and trial payloads.
  *
@@ -27,7 +28,7 @@ import {
 } from './envelopes.js';
 import { PERSISTENCE_SCOPES, SESSION_STATUSES } from './persistence-types.js';
 import { SEMVER_TAG_PATTERN } from './protocol-versions.js';
-import { SOURCE_CHOICES } from './trial-types.js';
+import { BLOCK_KINDS, SOURCE_CHOICES } from './trial-types.js';
 
 const semverTag = z.string().regex(SEMVER_TAG_PATTERN, 'expected semver tag');
 
@@ -143,6 +144,16 @@ const payloadSchemas: Readonly<Record<z.infer<typeof eventType>, z.ZodTypeAny | 
     instrument_version: z.string().min(1),
     wording_profile: z.enum(['SELF_AI', 'HUMAN_AI']),
     position: z.enum(['pre', 'post']),
+    comprehension_errors: z
+      .array(
+        z
+          .object({
+            item_id: z.string().min(1),
+            incorrect_count: z.number().int().min(1).max(100000),
+          })
+          .strict(),
+      )
+      .optional(),
     item_order: z.array(z.string().min(1)).min(1),
     responses: z
       .array(
@@ -155,6 +166,28 @@ const payloadSchemas: Readonly<Record<z.infer<typeof eventType>, z.ZodTypeAny | 
       )
       .min(1),
   }),
+  // minimax (2026-09-23): inter-block lifecycle events.
+  block_intro_presented: z
+    .object({
+      block_id: z.string().min(1),
+      block_kind: z.enum(BLOCK_KINDS),
+      block_index: z.number().int().nonnegative(),
+      total_trials: z.number().int().positive(),
+      intro_notice: z.string().min(1),
+    })
+    .strict(),
+  block_completed: z
+    .object({
+      block_id: z.string().min(1),
+      block_kind: z.enum(BLOCK_KINDS),
+      block_index: z.number().int().nonnegative(),
+      trials_completed: z.number().int().nonnegative(),
+      correct_count: z.number().int().nonnegative(),
+      total_points_earned: z.number().int().nonnegative(),
+      had_source_choice: z.boolean(),
+      score_excluded_from_formal: z.boolean(),
+    })
+    .strict(),
   session_completion_requested: z.object({
     ack_required_event_count: z.number().int().nonnegative(),
   }),
@@ -208,6 +241,13 @@ export const publicTrialSchema = z
     trial_id: z.string().min(1),
     trial_index: z.number().int().nonnegative(),
     phase: z.enum(['practice', 'calibration', 'main']),
+    // minimax (2026-09-23): block metadata. The legacy `phase` field is
+    // kept for backward compatibility; new clients should rely on
+    // `block_kind` for routing trial-level events to the right block.
+    block_id: z.string().min(1),
+    block_kind: z.enum(BLOCK_KINDS),
+    trial_index_in_block: z.number().int().nonnegative(),
+    block_total_trials: z.number().int().positive(),
     visible_history: z
       .array(
         z.object({
@@ -359,6 +399,10 @@ export const sessionSchema = z.object({
   contract_version: semverTag,
   adapter_version: z.string().min(1),
   provider: z.string().min(1),
+  configuration_revision: z.number().int().nonnegative().optional(),
+  assignment_method: z.enum(['single', 'equal_random']).optional(),
+  questionnaire_validation_version: z.literal('1.0.0').optional(),
+  experiment_plan: experimentPlanSchema.optional(),
   condition_assignment: z
     .object({
       condition_id: z.string().min(1),

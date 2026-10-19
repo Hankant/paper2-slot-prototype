@@ -11,6 +11,12 @@
  * for the participant's own prediction/confidence ahead of any source
  * choice. Adapters serve these blocks per `advice_timing` so the B/C/D
  * modules can render and record the demo flow without adding private fields.
+ *
+ * minimax (2026-09-23): adds `BlockKind` / `BlockSpec` / `BlockTransitionSpec`
+ * and the `block_id` / `block_kind` fields on `PublicTrial` to support a
+ * multi-block experiment (test block + formal block). Backward compatible:
+ * the existing `phase: 'practice' | 'calibration' | 'main'` is preserved;
+ * `block_kind` mirrors `phase` for trial-level routing.
  */
 
 import type { ExperimentEventType } from './envelopes.js';
@@ -32,6 +38,55 @@ export interface SlotMachineOption {
  */
 export const SOURCE_CHOICES = ['human', 'ai', 'mixed', 'no_advice_shown'] as const;
 export type SourceChoice = (typeof SOURCE_CHOICES)[number];
+
+/**
+ * minimax (2026-09-23): block taxonomy for multi-block experiments.
+ * `test` blocks let participants rehearse the trial flow without polluting
+ * the formal data; `formal` blocks carry the data used for analysis.
+ */
+export const BLOCK_KINDS = ['test', 'formal'] as const;
+export type BlockKind = (typeof BLOCK_KINDS)[number];
+
+/**
+ * minimax (2026-09-23): static description of a single experimental block.
+ * The orchestrator (UI/JS side) reads `BlockSpec[]` to drive transitions;
+ * trial-level events carry `block_id` so the data layer can route records.
+ */
+export interface BlockSpec {
+  readonly block_id: string;
+  readonly block_kind: BlockKind;
+  /** 0-indexed position of this block inside the session. */
+  readonly block_index: number;
+  readonly total_trials: number;
+  /** Participant-visible label (e.g. "测试环节 · 4 题"). */
+  readonly display_label: string;
+  /** Short intro shown before the block starts. */
+  readonly intro_notice: string;
+  /** Short outro shown after the block finishes (before switch). */
+  readonly outro_notice: string;
+  /** When true, points earned in this block do NOT roll into the formal score. */
+  readonly scores_excluded_from_formal: boolean;
+}
+
+/**
+ * minimax (2026-09-23): payload for the inter-block switch screen.
+ * The orchestrator passes a `BlockTransitionSpec` to the switch-screen so
+ * participants see a visible summary and a clear "continue" CTA.
+ */
+export interface BlockTransitionSpec {
+  readonly from_block_id: string | null;
+  readonly to_block_id: string;
+  readonly from_display_label: string | null;
+  readonly to_display_label: string;
+  readonly summary: {
+    readonly trials_completed: number;
+    readonly correct_count: number;
+    readonly total_points_earned: number;
+    /** True when the source-strip was visible (formal block only). */
+    readonly had_source_choice: boolean;
+  };
+  readonly next_intro_notice: string;
+}
 
 /**
  * Advice block served to the participant. Omitted entirely when
@@ -61,6 +116,14 @@ export interface PublicTrial {
   readonly trial_id: string;
   readonly trial_index: number;
   readonly phase: 'practice' | 'calibration' | 'main';
+  /** minimax (2026-09-23): the block this trial belongs to. */
+  readonly block_id: string;
+  /** minimax (2026-09-23): mirrors `phase` for trial-level routing. */
+  readonly block_kind: BlockKind;
+  /** minimax (2026-09-23): 0-indexed position inside the block. */
+  readonly trial_index_in_block: number;
+  /** minimax (2026-09-23): total number of trials in this block. */
+  readonly block_total_trials: number;
   /** History visible at this phase; rewards are aggregated, never raw outcomes. */
   readonly visible_history: ReadonlyArray<SlotMachineHistoryEntry>;
   readonly machines: ReadonlyArray<SlotMachineOption>;

@@ -1,3 +1,4 @@
+import { mountExperimentFlow } from './ui/experiment-flow.js';
 import {
   CLIENT_VERSION,
   CONTRACT_VERSION,
@@ -56,15 +57,25 @@ async function startCollection(
       protocol_version: 'unreleased',
     },
   };
+  if (!snapshot) {
+    await adapter.sessionService.openSession(credential);
+    snapshot = await adapter.snapshot();
+  }
+  const plan = snapshot.session.experiment_plan;
+  const first = plan?.modules.find((m) => m.kind === 'trials');
+  const activeId =
+    snapshot.events.filter((e) => e.trial_id).at(-1)?.trial_id ??
+    (first?.kind === 'trials' ? first.block.block_id + '-trial-0' : 'preview-trial-1');
   let timer: ReturnType<typeof setTimeout> | undefined;
   const root = requireElement(document, '#paper2-immersive-root');
   function questionnaire(position: 'pre' | 'post'): Promise<void> {
     return mountQuestionnaireSequence(root, QUESTIONNAIRE_INSTRUMENT, position, {
+      draftSessionId:run.session.session_id,
       isSubmitted: (blockId) => run.hasQuestionnaireBlock(blockId),
       submit: (payload) => run.submitQuestionnaireBlock(payload),
     });
   }
-  const run: ImmersiveRun = new ImmersiveRun(adapter, 'preview-trial-1', {
+  const run: ImmersiveRun = new ImmersiveRun(adapter, activeId, {
     credential,
     ...(snapshot ? { snapshot } : {}),
     onAudit: (record) => {
@@ -78,7 +89,9 @@ async function startCollection(
         }, 500);
     },
     flushAudit: () => adapter.flushPending(),
-    beforeCompletion: () => questionnaire('post'),
+    ...(plan
+      ? { isLastInSession: () => false }
+      : { beforeCompletion: () => questionnaire('post') }),
   });
   const accepted = entry ?? (snapshot?.entry as CollectionEntryAcknowledgement);
   await run.initialize({ version: accepted.consent_version, acceptedAt: accepted.accepted_at });
@@ -91,6 +104,23 @@ async function startCollection(
       consent_version: accepted.consent_version,
       instructions_version: accepted.instructions_version,
     });
+  if (plan) {
+    await mountExperimentFlow(run, () => ({}), {
+      footer: '预测研究 · 服务器保存 · 刷新可继续',
+      saveStatus: '每轮作答获得服务器回执后才能继续。',
+      downloadName: 'paper2-collection-export.json',
+      exportRemote: async () => {
+        await adapter.flushPending();
+        return adapter.export();
+      },
+      onRestart: async () => {
+        await adapter.flushPending();
+        await adapter.logout();
+        if (timer) clearTimeout(timer);
+      },
+    });
+    return;
+  }
   if (!run.hasPractice())
     await mountPractice(root, run.trial.performance_reference, (payload) =>
       run.submitPractice(payload),
@@ -131,7 +161,9 @@ function showEntry(): void {
       badge: '数据收集试点',
       footerLeft: '预测任务 · 服务器保存试点',
       footerRight: '研究试运行',
-      credential: {},
+      credential: {
+        onSubmit: ({ entry_code }) => createRemoteAdapter().validateEntryCode(entry_code),
+      },
       detectedDeviceClass: detectDeviceClass(),
     },
   );
@@ -146,6 +178,15 @@ function boot(): void {
     requireElement(root, 'p').textContent =
       error instanceof Error ? error.message : '请检查网络后重试。';
     requireElement(root, 'button').onclick = boot;
+    if (error instanceof Error && error.message.includes('旧版流程')) {
+      const restart = document.createElement('button');
+      restart.className = 'secondary';
+      restart.textContent = '保留旧记录，开始新版体验';
+      restart.onclick = () => {
+        void createRemoteAdapter().logout().then(boot);
+      };
+      requireElement(root, 'main').append(restart);
+    }
   });
 }
 boot();

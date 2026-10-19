@@ -17,3 +17,5 @@ export * from './interfaces.js';
 export * from './validators.js';
 export * from './chat-events.js';
 export * from './chat-service.js';
+
+export * from './experiment-plan.js';

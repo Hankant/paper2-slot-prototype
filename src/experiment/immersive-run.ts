@@ -48,6 +48,14 @@ export interface RunHooks {
   readonly onAudit?: (record: AuditRecord) => void;
   /** Collect and persist post-task measures before requesting completion. */
   readonly beforeCompletion?: () => Promise<void>;
+  /**
+   * minimax (2026-09-23): when false, `presentFeedback` will only persist
+   * the per-trial feedback event. The orchestrator (not the run) is then
+   * responsible for emitting `session_completion_requested` and calling
+   * `finishSession` once the last block has finished.
+   * Defaults to true to preserve the single-trial contract.
+   */
+  readonly isLastInSession?: () => boolean;
 }
 
 const PREVIEW_CREDENTIAL: EntryCredential = {
@@ -73,6 +81,7 @@ export class ImmersiveRun {
   advice: RevealedAdviceBlock | null = null;
   feedback: TrialFeedback | null = null;
   practicePoints = 0;
+  readonly feedbacks = new Map<string, TrialFeedback>();
   sequence = 0;
   chatCompleted = false;
   restored = false;
@@ -80,11 +89,27 @@ export class ImmersiveRun {
   readonly audit: AuditRecord[] = [];
   private readonly records = new Map<string, { event: EventEnvelope; confirmed: boolean }>();
   private clock = performance.now();
+  /**
+   * minimax (2026-09-23): `trialId` is mutable so the RunOrchestrator can
+   * swap trials in-place between blocks. The legacy single-trial flow
+   * still passes a fixed trialId at construction.
+   */
+  trialId: string;
+  /**
+   * minimax (2026-09-23): `hooks` is exposed so the RunOrchestrator can
+   * layer `isLastInSession` onto a Run that was constructed by the
+   * bootstrap with other hooks already attached (e.g. `beforeCompletion`).
+   * Reads as before; the orchestrator mutates it via direct assignment.
+   */
+  hooks: RunHooks;
   constructor(
     readonly adapter: ExperimentAdapter,
-    readonly trialId: string,
-    private readonly hooks: RunHooks = {},
-  ) {}
+    trialId: string,
+    hooks: RunHooks = {},
+  ) {
+    this.trialId = trialId;
+    this.hooks = hooks;
+  }
 
   async initialize(consent?: { version: string; acceptedAt: string }): Promise<void> {
     this.session = await this.adapter.sessionService.openSession(
@@ -105,6 +130,48 @@ export class ImmersiveRun {
     this.note('opened', { ui_version: 'atelier-2', self_advice: false, restored: this.restored });
   }
 
+  /**
+   * minimax (2026-09-23): swap this Run to a different trialId without
+   * re-opening the session. Resets every per-trial variable so the state
+   * machine starts at `prediction` again, then loads the new trial from
+   * the adapter. Used by RunOrchestrator between trials.
+   */
+  async swapTrial(newTrialId: string): Promise<void> {
+    if (!this.session) throw new Error('请先初始化会话');
+    const nextTrial = publicTrialSchema.parse(
+      await this.adapter.trialService.loadTrial(this.session, newTrialId),
+    ) as PublicTrial;
+    this.trialId = newTrialId;
+    this.stage = 'prediction';
+    this.independent = '';
+    this.final = '';
+    this.confidence = null;
+    this.source = null;
+    this.advice = null;
+    this.feedback = null;
+    this.chatCompleted = false;
+    this.restored = false;
+    // Preserve session and earlier trial records; only visible trial state resets.
+    this.trial = nextTrial;
+    this.restoreSnapshot({
+      session: this.session,
+      events: this.savedEvents(),
+      completed: this.completed,
+    });
+    if (this.source === 'ai')
+      this.advice = await this.adapter.trialService.loadAdvice(this.session, this.trialId);
+    if ((this.stage as RunStage) === 'feedback') await this.resumeFeedback();
+    this.clock = performance.now();
+    this.note('opened', {
+      ui_version: 'atelier-2',
+      self_advice: false,
+      restored: false,
+      trial_id: this.trialId,
+      block_id: this.trial.block_id,
+      block_kind: this.trial.block_kind,
+    });
+  }
+
   /** Restore server-confirmed events: locked answers, sequence and stage. */
   private restoreSnapshot(snapshot: RestoredSnapshot): void {
     if (snapshot.session.session_id !== this.session.session_id) return;
@@ -113,7 +180,7 @@ export class ImmersiveRun {
       .filter((e) => e.session_id === this.session.session_id)
       .sort((a, b) => a.sequence_no - b.sequence_no);
     for (const event of confirmed) {
-      this.records.set(this.eventKey(event.event_type, event.payload), {
+      this.records.set(this.eventKey(event.event_type, event.payload, event.trial_id), {
         event,
         confirmed: true,
       });
@@ -123,27 +190,27 @@ export class ImmersiveRun {
     this.restored = true;
     this.completed = snapshot.completed === true;
 
-    const prediction = this.records.get('prediction_submitted')?.event;
+    const prediction = this.records.get(this.eventKey('prediction_submitted'))?.event;
     if (prediction?.event_type === 'prediction_submitted')
       this.independent = prediction.payload.machine_id;
-    const confidence = this.records.get('confidence_submitted')?.event;
+    const confidence = this.records.get(this.eventKey('confidence_submitted'))?.event;
     if (confidence?.event_type === 'confidence_submitted')
       this.confidence = confidence.payload.confidence_percent;
     const practice = this.records.get('practice_completed')?.event;
     if (practice?.event_type === 'practice_completed')
       this.practicePoints = practice.payload.total_points;
-    const source = this.records.get('source_selected')?.event;
+    const source = this.records.get(this.eventKey('source_selected'))?.event;
     if (
       source?.event_type === 'source_selected' &&
       (source.payload.source === 'human' || source.payload.source === 'ai')
     )
       this.source = source.payload.source;
-    const final = this.records.get('final_prediction_submitted')?.event;
+    const final = this.records.get(this.eventKey('final_prediction_submitted'))?.event;
     if (final?.event_type === 'final_prediction_submitted') this.final = final.payload.machine_id;
 
-    const hasConfidence = this.records.has('confidence_submitted');
-    const adviceRevealed = this.records.has('advice_revealed');
-    const feedbackPresented = this.records.has('feedback_presented');
+    const hasConfidence = this.records.has(this.eventKey('confidence_submitted'));
+    const adviceRevealed = this.records.has(this.eventKey('advice_revealed'));
+    const feedbackPresented = this.records.has(this.eventKey('feedback_presented'));
 
     if (!prediction || !hasConfidence) {
       // Partial prediction retries the SAME original choice (save() is
@@ -197,7 +264,15 @@ export class ImmersiveRun {
       id: randomId(),
       type,
       at_ms: Math.round(performance.now()),
-      data,
+      data: this.session?.experiment_plan
+        ? {
+            ...(data !== null && typeof data === 'object' && !Array.isArray(data)
+              ? data
+              : { value: data }),
+            trial_id: this.trialId,
+            block_id: this.trial?.block_id ?? null,
+          }
+        : data,
     };
     this.hooks.onAudit?.(record);
     this.audit.push(record);
@@ -206,14 +281,69 @@ export class ImmersiveRun {
     this.stage = stage;
     this.clock = performance.now();
   }
-  private eventKey(type: string, payload?: unknown): string {
-    if (type === 'questionnaire_block_submitted') {
+  private eventKey(type: string, payload?: unknown, trialId = this.trialId): string {
+    if (
+      type === 'questionnaire_block_submitted' ||
+      type === 'block_intro_presented' ||
+      type === 'block_completed'
+    ) {
       const blockId = (payload as { block_id?: unknown } | null)?.block_id;
       if (typeof blockId !== 'string' || blockId.length === 0)
         throw new Error('问卷区块缺少 block_id');
       return `${type}:${blockId}`;
     }
+    // minimax (2026-09-23): trial-level event keys include the current
+    // trial_id so the per-trial idempotency map does not collide when the
+    // orchestrator swaps to a new trial between blocks.
+    if (
+      type === 'prediction_submitted' ||
+      type === 'confidence_submitted' ||
+      type === 'source_selected' ||
+      type === 'advice_revealed' ||
+      type === 'final_prediction_submitted' ||
+      type === 'feedback_presented'
+    ) {
+      return `${trialId}:${type}`;
+    }
     return type;
+  }
+  savedEvents(): EventEnvelope[] {
+    return [...this.records.values()]
+      .filter((r) => r.confirmed)
+      .map((r) => r.event)
+      .sort((a, b) => a.sequence_no - b.sequence_no);
+  }
+  async submitBlockEvent(
+    type: 'block_intro_presented' | 'block_completed',
+    payload: unknown,
+  ): Promise<void> {
+    await this.save(type, payload);
+  }
+  hasFeedback(): boolean {
+    return this.records.get(this.eventKey('feedback_presented'))?.confirmed === true;
+  }
+  async hydrateFeedbacks(): Promise<void> {
+    for (const e of this.savedEvents())
+      if (e.event_type === 'feedback_presented' && e.trial_id && !this.feedbacks.has(e.trial_id)) {
+        this.feedbacks.set(
+          e.trial_id,
+          await this.adapter.trialService.getFeedback(this.session, e.trial_id),
+        );
+      }
+  }
+  points(excluded: boolean): number {
+    const plan = this.session.experiment_plan;
+    if (!plan) return this.practicePoints + (this.feedback?.points_awarded ?? 0);
+    const ids = new Set(
+      plan.modules.flatMap((m) =>
+        m.kind === 'trials' && m.block.scores_excluded_from_formal === excluded
+          ? Array.from({ length: m.block.total_trials }, (_, i) => m.block.block_id + '-trial-' + i)
+          : [],
+      ),
+    );
+    return [...this.feedbacks.values()]
+      .filter((f) => ids.has(f.trial_id))
+      .reduce((n, f) => n + f.points_awarded, 0);
   }
   hasQuestionnaireBlock(blockId: string): boolean {
     return this.records.get(`questionnaire_block_submitted:${blockId}`)?.confirmed === true;
@@ -259,7 +389,19 @@ export class ImmersiveRun {
                   ? (payload as EventPayloadMap['questionnaire_block_submitted']).position === 'pre'
                     ? 'profile'
                     : 'finalizing'
-                  : 'main',
+                  : // minimax (2026-09-23): route the trial-level `phase` field
+                    // by `block_kind`. test → practice; formal → main. Falls
+                    // back to 'main' when the trial has no block_kind (e.g.
+                    // legacy preview-trial).
+                    type === 'session_completion_requested' && this.session.experiment_plan
+                    ? 'finalizing'
+                    : type === 'block_intro_presented'
+                      ? 'practice'
+                      : type === 'block_completed'
+                        ? 'finalizing'
+                        : this.trial?.block_kind === 'test'
+                          ? 'practice'
+                          : 'main',
           event_type: type,
           client_timestamp: timestamp ?? new Date().toISOString(),
           elapsed_ms: Math.round(performance.now() - this.clock),
@@ -268,6 +410,8 @@ export class ImmersiveRun {
             'consent_recorded',
             'practice_completed',
             'questionnaire_block_submitted',
+            'block_intro_presented',
+            'block_completed',
           ].includes(type)
             ? {}
             : { trial_id: this.trialId }),
@@ -332,7 +476,7 @@ export class ImmersiveRun {
     if (this.stage !== 'chat' || !this.advice) throw new Error('建议不可见');
     await this.save('advice_revealed', {
       advice_id: this.advice.advice_id,
-      revealed_at_phase: 'main',
+      revealed_at_phase: this.trial.phase,
     });
   }
   finishChat(): void {
@@ -364,13 +508,27 @@ export class ImmersiveRun {
     this.feedback ??= trialFeedbackSchema.parse(
       await this.adapter.trialService.getFeedback(this.session, this.trialId),
     ) as TrialFeedback;
+    this.feedbacks.set(this.trialId, this.feedback);
     return this.feedback;
   }
   async presentFeedback(result: TrialFeedback): Promise<void> {
     if (this.stage !== 'spinning' && this.stage !== 'feedback') throw new Error('尚未开奖');
+    if (result.trial_id !== this.trialId) throw new Error('反馈试次不匹配');
     this.feedback ??= result;
+    this.feedbacks.set(this.trialId, this.feedback);
     this.move('feedback');
     await this.save('feedback_presented', { presented_at_ms: Math.round(performance.now()) });
+    // minimax (2026-09-23): multi-block gating. When the orchestrator flags
+    // this trial as NOT the last one in the session, we stop short of
+    // emitting the global completion event and calling finishSession. The
+    // orchestrator owns those after the final block completes. Default
+    // behaviour (no flag supplied) preserves the single-trial contract.
+    const isLast = this.hooks.isLastInSession?.() !== false;
+    if (!isLast) return;
+    await this.finish();
+  }
+  async finish(): Promise<void> {
+    if (this.completed) return;
     await this.hooks.beforeCompletion?.();
     await this.save('session_completion_requested', { ack_required_event_count: this.sequence });
     // Mandatory records are durable; pending audit must be flushed BEFORE finish.

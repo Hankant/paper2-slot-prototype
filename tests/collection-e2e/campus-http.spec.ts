@@ -1,14 +1,16 @@
 import { test, expect } from '@playwright/test';
 import { completePostQuestionnaires, completePreQuestionnaires } from '../helpers/questionnaire.js';
-import { completePractice } from '../helpers/practice.js';
+import { enterBlock, rounds, nextRound } from '../helpers/multi-round.js';
 
 for (const source of ['human', 'ai'] as const) {
   test(`non-secure HTTP ${source}: consent, prediction, completion, reload and export`, async ({
     page,
   }) => {
     await page.setViewportSize({ width: 390, height: 844 });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
+    await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.goto('/collect.html');
     // No stubs or secure-origin flags: browser must really disable these APIs.
     expect(
@@ -21,11 +23,14 @@ for (const source of ['human', 'ai'] as const) {
     ).toEqual({ secure: false, uuid: 'undefined', subtle: 'undefined', random: 'function' });
     await page.getByLabel('参与码', { exact: true }).fill('PAPER2-TEST');
     await page.getByRole('button', { name: /继续阅读知情同意/ }).click();
+    await expect(page.getByRole('checkbox').first()).toBeVisible();
     for (const check of await page.getByRole('checkbox').all()) await check.check();
     await page.getByRole('button', { name: /同意并查看操作说明/ }).click();
     await page.getByRole('button', { name: /开始实验/ }).click();
-    await completePractice(page);
+    await enterBlock(page);
+    await rounds(page, 2);
     await completePreQuestionnaires(page);
+    await enterBlock(page);
     await page.getByRole('button', { name: '选择机器 A', exact: true }).click();
     await page.getByRole('button', { name: /确认独立预测/ }).click();
     await page
@@ -40,19 +45,25 @@ for (const source of ['human', 'ai'] as const) {
     await page.getByRole('button', { name: '选择机器 B', exact: true }).click();
     await page.getByRole('button', { name: /锁定最终预测/ }).click();
     await page.getByRole('button', { name: '拉杆开奖', exact: true }).click();
+    await expect(page.locator('#step-label')).toHaveText('本轮完成');
+    await nextRound(page);
+    await rounds(page, 2);
     await completePostQuestionnaires(page);
-    await expect(page.locator('#step-label')).toHaveText('本轮完成');
+    await expect(page.getByRole('heading', { name: '感谢完成本次任务' })).toBeVisible();
     await page.reload();
-    await expect(page.locator('#step-label')).toHaveText('本轮完成');
+    await expect(page.getByRole('heading', { name: '感谢完成本次任务' })).toBeVisible();
     const data = await page.evaluate(async () => (await fetch('/api/export')).json());
     expect(data.completed).toBe(true);
-    expect(data.events).toHaveLength(source === 'ai' ? 15 : 14);
+    expect(data.feedbacks).toHaveLength(5);
     expect(new Set(data.events.map((event: { event_id: string }) => event.event_id)).size).toBe(
       data.events.length,
     );
-    expect(data.feedback.advice_evaluation.advice_exposed).toBe(source === 'ai');
+    expect(
+      data.feedbacks.find((f: { trial_id: string }) => f.trial_id === 'formal-trial-0')
+        .advice_evaluation.advice_exposed,
+    ).toBe(source === 'ai');
     const download = page.waitForEvent('download');
-    await page.getByRole('button', { name: /下载本轮记录/ }).click();
+    await page.getByRole('button', { name: /下载全部记录/ }).click();
     await (await download).saveAs(`artifacts/collection-tests/campus-${source}.json`);
     expect(errors).toEqual([]);
   });

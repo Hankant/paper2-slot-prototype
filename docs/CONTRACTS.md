@@ -1,3 +1,5 @@
+> 2026-09-23 更新：多轮协议 0.6.0 已实现。默认 3 轮试玩 → 前测 → 8 轮正式任务 → 后测；预览与采集共用模块编排。配置、逐轮导出与旧会话兼容见 [多轮流程说明](MULTI_ROUND_FLOW.md)。下文较早的单轮描述保留作历史记录。
+
 # 公共接口规格
 
 版本：**0.4.0，2026-09-21 问卷事件增量**。0.3.0 的试次、反馈和聊天接口保持原语义；新增可重复的前测/后测区块事件。正式研究方案仍 unreleased。精确类型以 src/contracts/index.ts 及 validators.ts 为准。
@@ -101,3 +103,7 @@ A 唯一维护共享接口、依赖、bootstrap 和版本。B/C/D 按职责表�
 - 状态机镜像：`docs/CHAT_STATE_TABLE.md`；与 `IMMERSIVE_UI_PLAN.md §4.2 §4.3` 对齐。
 - 错误码：`CHAT_TIMEOUT` / `CHAT_RATE_LIMITED` / `CHAT_PROVIDER_DOWN` / `CHAT_OUTPUT_BLOCKED` / `CHAT_INVALID_INPUT` / `CHAT_UNKNOWN`；`retryable` 默认 `true` 除非显式 `CHAT_OUTPUT_BLOCKED`/`CHAT_INVALID_INPUT`。
 - 计划冻结于 `0.4.0-rc`，等 B 视觉稿、C `LocalChatAdapter`、Q Playwright 三条全部合入。
+
+## 2026-10-10 登录页参与码预检（兼容新增）
+
+POST /api/entry/validate，JSON 请求字段 entry_code；有效返回 200 和 { valid: true }，无效返回 403 / INVALID_ENTRY_CODE。沿用同源与 JSON 校验，不生成会话、cookie、作答记录；单独按连接地址每分钟 120 次限流，不消耗创建会话额度。POST /api/session 仍最终校验参与码与知情同意。

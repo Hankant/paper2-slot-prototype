@@ -1,3 +1,4 @@
+import { createExperimentPlan } from '../src/domain/experiment-plan.js';
 /**
  * Production entry for the collection server (see .agents/architecture.md).
  * Build target: dist-server/main.js on Node 24. No baked-in credentials.
@@ -38,9 +39,14 @@ if (process.env.NODE_ENV === 'production' && !SECURE_COOKIES) {
   fail('NODE_ENV=production requires SECURE_COOKIES=1');
 }
 if (!Number.isInteger(PORT) || PORT <= 0 || PORT > 65535) fail('PORT must be a valid port number');
-if (HUMAN_AVERAGE_HIT_RATE < 0 || HUMAN_AVERAGE_HIT_RATE > 1)
+if (
+  !Number.isFinite(HUMAN_AVERAGE_HIT_RATE) ||
+  HUMAN_AVERAGE_HIT_RATE < 0 ||
+  HUMAN_AVERAGE_HIT_RATE > 1
+)
   fail('HUMAN_AVERAGE_HIT_RATE must be between 0 and 1');
-if (AI_HIT_RATE < 0 || AI_HIT_RATE > 1) fail('AI_HIT_RATE must be between 0 and 1');
+if (!Number.isFinite(AI_HIT_RATE) || AI_HIT_RATE < 0 || AI_HIT_RATE > 1)
+  fail('AI_HIT_RATE must be between 0 and 1');
 if (!Number.isInteger(POINTS_PER_CORRECT) || POINTS_PER_CORRECT < 0)
   fail('POINTS_PER_CORRECT must be a non-negative integer');
 if (
@@ -66,7 +72,10 @@ const { server, close } = createCollectionServer({
     points_per_correct: POINTS_PER_CORRECT,
     reward_per_point_cny: REWARD_PER_POINT_CNY,
   },
-  practiceRequired: true,
+  experimentPlan: createExperimentPlan(
+    process.env.PRACTICE_ROUNDS === undefined ? undefined : Number(process.env.PRACTICE_ROUNDS),
+    process.env.FORMAL_ROUNDS === undefined ? undefined : Number(process.env.FORMAL_ROUNDS),
+  ),
 });
 
 server.listen(PORT, HOST, () => {

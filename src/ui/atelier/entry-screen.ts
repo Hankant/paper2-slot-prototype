@@ -16,7 +16,7 @@ export interface EntryScreenOptions {
     readonly onSubmit?: (credential: {
       entry_code: string;
       participation_mode: ParticipationMode;
-    }) => void;
+    }) => void | Promise<void>;
   };
   /** Device detected by the caller (shown read-only; never asked here). */
   readonly detectedDeviceClass?: DeviceClass;
@@ -61,25 +61,43 @@ export function mountEntry(
       'access',
       `<div class="instructions-heading"><p class="eyebrow">参与码 / ACCESS</p><h1 tabindex="-1">输入参与码，选择参与方式。</h1><p class="entry-lead">参与码由研究组织提供；参与方式与设备类型会分别记录。</p></div>
       <section class="consent-card" aria-labelledby="access-title"><h2 id="access-title" class="eyebrow">访问信息</h2>
-      <fieldset class="credential-fields"><label for="entry-code">参与码</label><input id="entry-code" type="text" inputmode="text" autocomplete="off" spellcheck="false" placeholder="例如 COLLECT-2026" minlength="8" required>
+      <fieldset class="credential-fields"><label for="entry-code">参与码</label><input id="entry-code" type="text" inputmode="text" autocomplete="off" spellcheck="false" placeholder="例如 COLLECT-2026" minlength="8" aria-describedby="entry-code-error" required><p id="entry-code-error" class="entry-error" role="alert"></p>
       <legend>参与方式</legend><div class="mode-options"><label><input type="radio" name="participation-mode" value="on_site" checked><span>现场参与<small>在研究现场扫码或登记进入</small></span></label><label><input type="radio" name="participation-mode" value="remote"><span>远程参与<small>通过链接在自有设备上完成</small></span></label></div>
       <p class="device-note">检测到的设备类型：<b>${deviceLabel[options.detectedDeviceClass ?? 'unknown']}</b>（按浏览器信息自动识别，单独记录）</p></fieldset>
-      <div class="entry-actions"><button class="primary" id="credential-next" disabled>继续阅读知情同意 <span>→</span></button></div><p class="entry-error" role="alert"></p></section>`,
+      <div class="entry-actions"><button class="primary" id="credential-next" disabled>继续阅读知情同意 <span>→</span></button></div></section>`,
     );
     const input = get<HTMLInputElement>('#entry-code');
     const next = get<HTMLButtonElement>('#credential-next');
     input.oninput = () => {
       get('.entry-error').textContent = '';
+      input.removeAttribute('aria-invalid');
       next.disabled = input.value.trim().length < 8;
     };
-    next.onclick = () => {
+    next.onclick = async () => {
+      if (busy || next.disabled) return;
+      busy = true;
+      input.disabled = true;
+      next.disabled = true;
+      next.textContent = '正在验证参与码…';
+      get('.entry-error').textContent = '';
       const mode = root.querySelector<HTMLInputElement>('input[name="participation-mode"]:checked');
       credential = {
         entry_code: input.value.trim(),
         participation_mode: (mode?.value === 'remote' ? 'remote' : 'on_site') as ParticipationMode,
       };
-      options.credential?.onSubmit?.(credential);
-      consent();
+      try {
+        await options.credential?.onSubmit?.(credential);
+        consent();
+      } catch (error) {
+        get('.entry-error').textContent =
+          error instanceof Error ? error.message : '暂时无法验证参与码，请重试。';
+        input.setAttribute('aria-invalid', 'true');
+      } finally {
+        busy = false;
+        input.disabled = false;
+        next.disabled = input.value.trim().length < 8;
+        next.textContent = '继续阅读知情同意 →';
+      }
     };
   }
 
