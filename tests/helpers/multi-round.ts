@@ -1,11 +1,21 @@
 import { expect, type Page } from '@playwright/test';
 
+/** 信心滑杆在确认独立预测前必须被显式拖动，否则按钮保持禁用。 */
+export async function setConfidence(page: Page, value = 50): Promise<void> {
+  await page.locator('#confidence').evaluate((element, raw) => {
+    const input = element as HTMLInputElement;
+    input.value = String(raw);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  }, value);
+}
+
 export async function enterBlock(page: Page): Promise<void> {
   await page.getByRole('button', { name: /开始试玩|开始正式实验/ }).click();
   await expect(page.locator('.slot-cabinet')).toHaveCount(3);
 }
 export async function selfRound(page: Page): Promise<void> {
   await page.getByRole('button', { name: '选择机器 A', exact: true }).click();
+  await setConfidence(page);
   await page.getByRole('button', { name: /确认独立预测/ }).click();
   await page.getByRole('button', { name: /依据自己判断/ }).click();
   await page.getByRole('button', { name: '选择机器 C', exact: true }).click();

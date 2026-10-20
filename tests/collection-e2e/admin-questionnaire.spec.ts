@@ -35,6 +35,7 @@ test('practice hides rewards; questionnaire reload preserves order, answers and 
   await nextRound(page);
   await rounds(page, 1);
   const items = page.locator('[data-block-id="pre-prior-beliefs"] [data-item-id]');
+  await expect(items.first()).toBeVisible();
   const order = await items.evaluateAll((nodes) =>
     nodes.map((n) => (n as HTMLElement).dataset.itemId),
   );

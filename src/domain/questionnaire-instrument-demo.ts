@@ -6,7 +6,7 @@ import { defineQuestionnaireInstrument } from './questionnaire.js';
  * are implemented elsewhere. These are pilot items, not a validated scale.
  */
 export const QUESTIONNAIRE_INSTRUMENT = defineQuestionnaireInstrument({
-  version: 'demo-questionnaire-0.1.0',
+  version: 'demo-questionnaire-0.1.2',
   wordingProfile: 'SELF_AI',
   title: '预测任务问卷',
   blocks: [
@@ -22,7 +22,8 @@ export const QUESTIONNAIRE_INSTRUMENT = defineQuestionnaireInstrument({
         {
           id: 'PRE_PRIOR_ACC_SELF',
           kind: 'slider',
-          prompt: '在尚未看到正式题结果前，您预计自己在本实验正式题中的正确率是多少？',
+          prompt:
+            '在尚未看到正式题结果前，您预计自己独立做出的预测在本实验正式题中的正确率是多少？',
           required: true,
           min: 0,
           max: 100,
@@ -165,21 +166,22 @@ export const QUESTIONNAIRE_INSTRUMENT = defineQuestionnaireInstrument({
       position: 'post',
       eyebrow: '任务后问卷 · 2 / 4',
       title: '对两种判断来源的评价',
-      intro: '1 表示非常不同意，7 表示非常同意。题目中的“AI 助手”指刚才任务中提供建议的助手。',
+      intro:
+        '1 表示非常不同意，7 表示非常同意。题目中的“AI 助手”指刚才任务中提供建议的助手；“我的独立判断”指你在参考 AI 建议之前、单独做出的那次预测；“最终决定”指你在参考 AI 建议之后锁定的最终答案。',
       submitLabel: '继续',
       randomizeQuestions: true,
       questions: [
         ...[
           ['POST_PT_SELF_RELIABLE', '在这个预测任务中，我认为自己的独立判断是可靠的。'],
-          ['POST_PT_SELF_COMPETENT', '我认为自己有能力完成这个预测任务。'],
-          ['POST_PT_SELF_DEPENDABLE', '完成同类预测时，我认为自己的判断表现值得信赖。'],
-          ['POST_AT_SELF_RELY', '如果继续完成同类任务，我愿意依赖自己的判断。'],
-          ['POST_AT_SELF_BASIS', '结果不确定时，我愿意把自己的判断作为最终决定的重要依据。'],
-          ['POST_PT_AI_RELIABLE', '在这个预测任务中，我认为 AI 助手的判断是可靠的。'],
+          ['POST_PT_SELF_COMPETENT', '不依靠 AI 助手，我认为自己有能力独立完成这个预测任务。'],
+          ['POST_PT_SELF_DEPENDABLE', '完成同类预测时，我认为自己独立做出的判断表现值得信赖。'],
+          ['POST_AT_SELF_RELY', '如果继续完成同类任务，我愿意依赖自己独立做出的判断。'],
+          ['POST_AT_SELF_BASIS', '结果不确定时，我愿意把自己独立做出的判断作为最终决定的重要依据。'],
+          ['POST_PT_AI_RELIABLE', '在这个预测任务中，我认为 AI 助手的建议是可靠的。'],
           ['POST_PT_AI_COMPETENT', '我认为 AI 助手有能力完成这个预测任务。'],
-          ['POST_PT_AI_DEPENDABLE', '完成同类预测时，我认为 AI 助手的表现值得信赖。'],
-          ['POST_AT_AI_RELY', '如果继续完成同类任务，我愿意依赖 AI 助手的判断。'],
-          ['POST_AT_AI_BASIS', '结果不确定时，我愿意把 AI 助手的判断作为最终决定的重要依据。'],
+          ['POST_PT_AI_DEPENDABLE', '完成同类预测时，我认为 AI 助手的建议值得信赖。'],
+          ['POST_AT_AI_RELY', '如果继续完成同类任务，我愿意依赖 AI 助手的建议。'],
+          ['POST_AT_AI_BASIS', '结果不确定时，我愿意把 AI 助手的建议作为最终决定的重要依据。'],
         ].map(([id, prompt]) => ({
           id: id ?? '',
           kind: 'likert' as const,
@@ -205,7 +207,7 @@ export const QUESTIONNAIRE_INSTRUMENT = defineQuestionnaireInstrument({
           id: 'POST_MIN_ACC_SELF',
           kind: 'slider',
           prompt:
-            '继续完成相同任务时，您至少需要确认自己的长期正确率达到多少，才愿意主要依据自己的判断？',
+            '继续完成相同任务时，您至少需要确认自己独立做出的判断的长期正确率达到多少，才愿意主要依据它？',
           required: true,
           min: 0,
           max: 100,

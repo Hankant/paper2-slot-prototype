@@ -434,13 +434,15 @@ export class ImmersiveRun {
   ): Promise<void> {
     await this.save('questionnaire_block_submitted', payload);
   }
-  async predict(id: string, confidence: number): Promise<void> {
+  async predict(id: string, confidence: number | null): Promise<void> {
     if (this.stage !== 'prediction') throw new Error('独立预测已经锁定');
+    const value = this.confidence ?? confidence;
+    if (value === null || !Number.isFinite(value))
+      throw new Error('请先评估本轮预测的把握');
     this.independent ||= id;
-    const locked = this.confidence ?? confidence;
-    this.confidence = locked;
+    this.confidence = value;
     await this.save('prediction_submitted', this.selection(this.independent));
-    await this.save('confidence_submitted', { confidence_percent: locked });
+    await this.save('confidence_submitted', { confidence_percent: value });
     this.move('source');
   }
   async chooseSource(source: 'human' | 'ai'): Promise<void> {

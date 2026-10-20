@@ -595,6 +595,14 @@ h1 {
   font-weight: 500;
   color: var(--green);
 }
+/* 未评估状态：没有填写数值时，滑杆降透明度并给出提示。 */
+.confidence-control.is-empty input[type='range'] {
+  opacity: 0.45;
+}
+.confidence-control.is-empty b {
+  color: var(--muted);
+  font-size: 13px;
+}
 .confidence-control small {
   font-size: 9px;
   color: #8b9687;

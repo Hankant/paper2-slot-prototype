@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { completePostQuestionnaires, completePreQuestionnaires } from '../helpers/questionnaire.js';
-import { enterBlock, rounds, nextRound } from '../helpers/multi-round.js';
+import { enterBlock, rounds, nextRound, setConfidence } from '../helpers/multi-round.js';
 
 for (const source of ['human', 'ai'] as const) {
   test(`non-secure HTTP ${source}: consent, prediction, completion, reload and export`, async ({
@@ -32,6 +32,7 @@ for (const source of ['human', 'ai'] as const) {
     await completePreQuestionnaires(page);
     await enterBlock(page);
     await page.getByRole('button', { name: '选择机器 A', exact: true }).click();
+    await setConfidence(page);
     await page.getByRole('button', { name: /确认独立预测/ }).click();
     await page
       .getByRole('button', { name: source === 'ai' ? /参考 AI 建议/ : /依据自己判断/ })

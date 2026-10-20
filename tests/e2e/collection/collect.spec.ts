@@ -8,6 +8,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createCollectionServer, type CollectionServer } from '../../../server/app.js';
+import { setConfidence } from '../../helpers/multi-round.js';
 import {
   completePostQuestionnaires,
   completePreQuestionnaires,
@@ -131,6 +132,7 @@ async function enter(page: Page): Promise<void> {
 
 async function submitIndependent(page: Page, machine: string): Promise<void> {
   await page.getByRole('button', { name: `选择机器 ${machine}`, exact: true }).click();
+  await setConfidence(page);
   await page.getByRole('button', { name: /确认独立预测/ }).click();
   await expect(page.getByRole('button', { name: /依据自己判断/ })).toBeVisible();
 }

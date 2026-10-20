@@ -48,7 +48,7 @@ export function mountImmersive(
   const root = requireElement(document, '#paper2-immersive-root');
   let selected =
     run.stage === 'prediction' ? run.independent : run.stage === 'final' ? run.final : '';
-  let confidence = run.confidence ?? 50;
+  let confidence: number | null = run.confidence ?? null;
   let busy = false;
   let chat: ChatPanel | null = null;
   let scoreFrame = 0;
@@ -176,7 +176,10 @@ export function mountImmersive(
   }
   function updateAction(): void {
     root.querySelectorAll<HTMLButtonElement>('.decision-controls button').forEach((b) => {
-      b.disabled = busy || (b.dataset.requiresSelection === 'true' && !selected);
+      b.disabled =
+        busy ||
+        (b.dataset.requiresSelection === 'true' && !selected) ||
+        (b.dataset.requiresConfidence === 'true' && confidence === null);
     });
   }
   function renderControls(): void {
@@ -238,13 +241,18 @@ export function mountImmersive(
     get('#step-title').textContent = text[1] ?? '';
     get('#step-help').textContent = text[2] ?? '';
     if (run.stage === 'prediction') {
-      controls.innerHTML = `<div class="confidence-control"><label for="confidence"><span>你预计自己本轮预测正确的概率是多少？</span><b id="confidence-value">${confidence}<small>%</small></b></label><input id="confidence" aria-label="你预计自己本轮预测正确的概率是多少？" aria-describedby="confidence-help" type="range" min="0" max="100" value="${confidence}"><p id="confidence-help" class="confidence-help">0% 表示肯定猜不中，100% 表示肯定猜中。请评估本轮，不是整场实验。</p></div><button class="primary" data-requires-selection="true">确认独立预测 <span>→</span></button>`;
+      const confidenceFilled = confidence !== null;
+      const confidenceText = confidenceFilled ? `${confidence}<small>%</small>` : '未评估';
+      controls.innerHTML = `<div class="confidence-control${confidenceFilled ? '' : ' is-empty'}"><label for="confidence"><span>在看到 AI 建议之前，你认为这次独立预测正确的概率是多少？</span><b id="confidence-value">${confidenceText}</b></label><input id="confidence" aria-label="在看到 AI 建议之前，你认为这次独立预测正确的概率是多少？" aria-describedby="confidence-help" type="range" min="0" max="100"${confidenceFilled ? ` value="${confidence}"` : ''}><p id="confidence-help" class="confidence-help">0% 表示肯定猜不中，100% 表示肯定猜中。请评估本轮，不是整场实验。</p></div><button class="primary" data-requires-selection="true" data-requires-confidence="true">确认独立预测 <span>→</span></button>`;
       get<HTMLInputElement>('#confidence').oninput = (e) => {
         confidence = Number((e.target as HTMLInputElement).value);
         get('#confidence-value').innerHTML = `${confidence}<small>%</small>`;
+        root.querySelector('.confidence-control')?.classList.remove('is-empty');
+        updateAction();
       };
       get<HTMLButtonElement>('.primary').onclick = () =>
         void perform(async () => {
+          if (confidence === null) throw new Error('请先评估本轮预测的把握');
           await run.predict(selected, confidence);
           renderControls();
         });

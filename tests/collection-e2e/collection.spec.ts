@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { completePostQuestionnaires, completePreQuestionnaires } from '../helpers/questionnaire.js';
-import { enterBlock, rounds, nextRound } from '../helpers/multi-round.js';
+import { enterBlock, rounds, nextRound, setConfidence } from '../helpers/multi-round.js';
 async function enter(page: Page) {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/collect.html');
@@ -20,6 +20,7 @@ async function enter(page: Page) {
 }
 async function predict(page: Page) {
   await page.getByRole('button', { name: '选择机器 A', exact: true }).click();
+  await setConfidence(page);
   await page.getByRole('button', { name: /确认独立预测/ }).click();
   await expect(page.getByRole('button', { name: /依据自己判断/ })).toBeVisible();
 }
@@ -144,12 +145,14 @@ test('lost write acknowledgement then reload retries original event IDs, without
     } else await route.continue();
   });
   await page.getByRole('button', { name: '选择机器 A', exact: true }).click();
+  await setConfidence(page);
   await page.getByRole('button', { name: /确认独立预测/ }).click();
   await expect(page.getByRole('alert')).not.toBeEmpty();
   lose = false;
   await page.reload();
   await expect(page.getByRole('button', { name: /确认独立预测/ })).toBeVisible();
   await expect(page.getByRole('button', { name: '选择机器 B', exact: true })).toBeDisabled();
+  await setConfidence(page);
   await page.getByRole('button', { name: /确认独立预测/ }).click();
   await expect(page.getByRole('button', { name: /依据自己判断/ })).toBeVisible();
   const data = await (await page.request.get('/api/export')).json();
@@ -216,4 +219,39 @@ test('AI reload before advice, streamed answer, failed finish stays pending and 
   );
   expect(match.events).toEqual(data.events);
   expect(match.feedback).toEqual(data.feedback);
+});
+
+test('confidence must be rated before the independent prediction can be confirmed', async ({
+  page,
+}) => {
+  await page.goto('/collect.html');
+  await page.getByLabel('参与码', { exact: true }).fill('PAPER2-TEST');
+  await page.locator('input[value="remote"]').check();
+  await page.getByRole('button', { name: /继续阅读知情同意/ }).click();
+  const checks = page.getByRole('checkbox');
+  await expect(checks.first()).toBeVisible();
+  for (let i = 0; i < (await checks.count()); i++) await checks.nth(i).check();
+  await page.getByRole('button', { name: /同意并查看操作说明/ }).click();
+  await page.getByRole('button', { name: /开始实验/ }).click();
+  await enterBlock(page);
+
+  // 未评估：滑杆不显示任何百分比，确认按钮保持禁用
+  await expect(page.locator('#confidence-value')).toHaveText('未评估');
+  await page.getByRole('button', { name: '选择机器 A', exact: true }).click();
+  await expect(page.getByRole('button', { name: /确认独立预测/ })).toBeDisabled();
+
+  // 评估之后：按钮解禁，并显示实际提交的数值
+  await setConfidence(page, 40);
+  await expect(page.getByRole('button', { name: /确认独立预测/ })).toBeEnabled();
+  await expect(page.locator('#confidence-value')).toHaveText('40%');
+  await page.getByRole('button', { name: /确认独立预测/ }).click();
+  // 等阶段推进到来源选择，说明预测与信心已落库
+  await expect(page.getByRole('button', { name: /依据自己判断/ })).toBeVisible();
+
+  // 提交到服务器的是被评估过的数值
+  const data = await (await page.request.get('/api/export')).json();
+  const confidence = data.events.find(
+    (e: { event_type: string }) => e.event_type === 'confidence_submitted',
+  );
+  expect(confidence.payload.confidence_percent).toBe(40);
 });

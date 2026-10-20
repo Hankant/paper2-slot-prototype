@@ -1,7 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { completePreQuestionnaires, completePostQuestionnaires } from '../helpers/questionnaire.js';
-import { enterBlock, rounds, nextRound, selfRound } from '../helpers/multi-round.js';
+import { enterBlock, rounds, nextRound, selfRound, setConfidence } from '../helpers/multi-round.js';
 
 async function entry(page: Page) {
   for (const c of await page.getByRole('checkbox').all()) await c.check();
@@ -27,6 +27,7 @@ for (const width of [1280, 390])
     await page.screenshot({ path: `artifacts/qa/multi-practice-${width}.png`, fullPage: true });
     // Exercise stopped/retried streaming within the same shared practice trial.
     await page.getByRole('button', { name: '选择机器 A', exact: true }).click();
+    await setConfidence(page);
     await page.getByRole('button', { name: /确认独立预测/ }).click();
     await page.getByRole('button', { name: /参考 AI 建议/ }).click();
     await page.getByRole('button', { name: '发送消息', exact: true }).click();
